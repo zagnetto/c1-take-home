@@ -287,6 +287,12 @@ Existing `services/messages.ts` (`createMessage`) stays; GET logic joins it in t
 
 Delete `routes/messagesPagination.ts` once constants and helpers are split.
 
+#### Phase 5 status
+
+- **Done** — see `docs/025-project-structure-refactor-phase5.md`.
+- Routes import only controllers and middleware; validation and HTTP mapping live in controllers.
+- `messagesController.create` keeps `broadcast()` — controller orchestration, not service persistence.
+
 ### Phase 6 — documentation
 
 - Update `.cursor/skills/relay-architecture/SKILL.md` (add controllers layer).
