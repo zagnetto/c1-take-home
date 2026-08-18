@@ -8,3 +8,7 @@ export function sessionTokenKey(token: string): string {
 export function sessionUserSlotKey(userId: number): string {
   return `relay:session:user:${userId}`;
 }
+
+export function messageRateLimitKey(conversationId: number, userId: number): string {
+  return `relay:ratelimit:messages:${conversationId}:${userId}`;
+}

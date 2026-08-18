@@ -59,6 +59,13 @@ function isMongoDuplicateKeyError(err: unknown): boolean {
   return typeof err === 'object' && err !== null && 'code' in err && (err as { code: number }).code === 11000;
 }
 
+export async function messageExistsForClientId(
+  senderId: number,
+  clientId: string,
+): Promise<boolean> {
+  return (await findMessageBySenderClientId(senderId, clientId)) != null;
+}
+
 async function findMessageBySenderClientId(
   senderId: number,
   clientId: string,

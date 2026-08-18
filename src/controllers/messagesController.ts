@@ -1,5 +1,11 @@
 import type { Request, Response } from 'express';
-import { createMessage, IdempotencyConflictError, listMessages } from '../services/messages.ts';
+import {
+  createMessage,
+  IdempotencyConflictError,
+  listMessages,
+  messageExistsForClientId,
+} from '../services/messages.ts';
+import { releaseMessageSendSlot, reserveMessageSendSlot } from '../services/rateLimit.ts';
 import { broadcast } from '../ws/hub.ts';
 import { MAX_MESSAGE_BODY_LENGTH } from '../constants/messages.ts';
 import { parseLimit } from '../helpers/pagination.ts';
@@ -31,17 +37,38 @@ export async function create(req: Request, res: Response) {
     return res.status(400).json({ error: 'clientId must be a string up to 64 characters' });
   }
 
+  const senderId = req.sessionUser!.userId;
+  const skipRateLimit =
+    clientIdParsed != null && (await messageExistsForClientId(senderId, clientIdParsed));
+
+  let reservedSlot = false;
+  if (!skipRateLimit) {
+    const rateLimit = await reserveMessageSendSlot(conversationId, senderId);
+    if (!rateLimit.allowed) {
+      res.set('Retry-After', String(rateLimit.retryAfterSeconds));
+      return res.status(429).json({ error: 'message rate limit exceeded' });
+    }
+    reservedSlot = true;
+  }
+
   try {
     const { message: msg, isNew } = await createMessage({
       conversationId,
-      senderId: req.sessionUser!.userId,
+      senderId,
       body,
       clientId: clientIdParsed,
     });
 
+    if (reservedSlot && !isNew) {
+      await releaseMessageSendSlot(conversationId, senderId);
+    }
+
     if (isNew) void broadcast(msg.conversationId, { type: 'message', ...msg });
     res.status(isNew ? 201 : 200).json(msg);
   } catch (err) {
+    if (reservedSlot) {
+      await releaseMessageSendSlot(conversationId, senderId);
+    }
     if (err instanceof IdempotencyConflictError) {
       return res.status(409).json({ error: err.message });
     }
