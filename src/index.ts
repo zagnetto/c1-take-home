@@ -7,7 +7,7 @@ import { ensureIndexes } from './db/ensureIndexes.ts';
 import { waitForRedis } from './db/redis.ts';
 import { conversationsRouter } from './routes/conversations.ts';
 import { messagesRouter } from './routes/messages.ts';
-import { searchRouter } from './routes/search.js';
+import { searchRouter } from './routes/search.ts';
 import { sessionRouter } from './routes/session.ts';
 import { attachWs, closeWsServer, initRedisFanout, releaseWsServer } from './ws/hub.ts';
 import { closeMysql } from './db/mysql.ts';

@@ -272,6 +272,10 @@ Imports change from `../validation/messageInput.ts` → `../helpers/validation/m
 
 Existing `services/messages.ts` (`createMessage`) stays; GET logic joins it in the same module.
 
+#### Phase 4 status
+
+- **Done** — see `docs/024-project-structure-refactor-phase4.md`.
+
 ### Phase 5 — controllers + thin routes
 
 | Route file | Controller | Service |

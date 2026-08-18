@@ -1,13 +1,11 @@
 import express from 'express';
-import { createMessage, IdempotencyConflictError } from '../services/messages.ts';
-import { pool } from '../db/mysql.ts';
-import { mongo } from '../db/mongo.ts';
+import { createMessage, IdempotencyConflictError, listMessages } from '../services/messages.ts';
 import { broadcast } from '../ws/hub.ts';
 import { requireConversationAccess } from '../middleware/conversationAccess.ts';
 import { requireSession } from '../middleware/session.ts';
 import { asyncHandler } from '../middleware/errorHandler.ts';
 import { MAX_MESSAGE_BODY_LENGTH } from '../constants/messages.ts';
-import { buildMessagesPage, parseLimit } from '../helpers/pagination.ts';
+import { parseLimit } from '../helpers/pagination.ts';
 import {
   parseClientId,
   parsePositiveInt,
@@ -83,34 +81,6 @@ messagesRouter.get(
     return res.status(400).json({ error: 'before must be a positive integer' });
   }
 
-  const params =
-    before != null ? [conversationId, before, limit + 1] : [conversationId, limit + 1];
-  const sql =
-    before != null
-      ? `SELECT id, conversation_id AS conversationId, sender_id AS senderId, created_at AS createdAt
-         FROM messages
-         WHERE conversation_id = ? AND id < ?
-         ORDER BY id DESC
-         LIMIT ?`
-      : `SELECT id, conversation_id AS conversationId, sender_id AS senderId, created_at AS createdAt
-         FROM messages
-         WHERE conversation_id = ?
-         ORDER BY id DESC
-         LIMIT ?`;
-
-  const [rows] = await pool.query(sql, params);
-  const { messages: pageRows, hasMore, nextBefore } = buildMessagesPage(rows, limit);
-
-  const ids = pageRows.map((r) => r.id);
-  const bodies = ids.length
-    ? await mongo().collection('message_bodies').find({ _id: { $in: ids } }).toArray()
-    : [];
-  const bodyById = new Map(bodies.map((b) => [b._id, b.body]));
-
-  res.json({
-    messages: pageRows.map((r) => ({ ...r, body: bodyById.get(r.id) ?? '' })),
-    hasMore,
-    nextBefore,
-  });
+  res.json(await listMessages({ conversationId, limit, before }));
   }),
 );

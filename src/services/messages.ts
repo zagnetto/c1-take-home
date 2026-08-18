@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { promisify } from 'node:util';
 import { pool } from '../db/mysql.ts';
 import { mongo } from '../db/mongo.ts';
+import { buildMessagesPage, type MessagesPageResponse } from '../helpers/pagination.ts';
 
 const pbkdf2Async = promisify(crypto.pbkdf2);
 
@@ -147,6 +148,51 @@ async function rollbackMessageRow(id: number): Promise<void> {
       err: rollbackErr,
     });
   }
+}
+
+type MessageListRow = {
+  id: number;
+  conversationId: number;
+  senderId: number;
+  createdAt: Date;
+};
+
+export async function listMessages(input: {
+  conversationId: number;
+  limit: number;
+  before: number | null;
+}): Promise<MessagesPageResponse> {
+  const { conversationId, limit, before } = input;
+
+  const params =
+    before != null ? [conversationId, before, limit + 1] : [conversationId, limit + 1];
+  const sql =
+    before != null
+      ? `SELECT id, conversation_id AS conversationId, sender_id AS senderId, created_at AS createdAt
+         FROM messages
+         WHERE conversation_id = ? AND id < ?
+         ORDER BY id DESC
+         LIMIT ?`
+      : `SELECT id, conversation_id AS conversationId, sender_id AS senderId, created_at AS createdAt
+         FROM messages
+         WHERE conversation_id = ?
+         ORDER BY id DESC
+         LIMIT ?`;
+
+  const [rows] = await pool.query<MessageListRow[]>(sql, params);
+  const { messages: pageRows, hasMore, nextBefore } = buildMessagesPage(rows, limit);
+
+  const ids = pageRows.map((r) => r.id);
+  const bodies = ids.length
+    ? await mongo().collection('message_bodies').find({ _id: { $in: ids } }).toArray()
+    : [];
+  const bodyById = new Map(bodies.map((b) => [b._id, b.body]));
+
+  return {
+    messages: pageRows.map((r) => ({ ...r, body: bodyById.get(r.id) ?? '' })),
+    hasMore,
+    nextBefore,
+  };
 }
 
 export async function createMessage(input: NewMessage): Promise<CreateMessageResult> {

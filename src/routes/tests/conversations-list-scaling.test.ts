@@ -19,7 +19,7 @@ const FOREIGN_MESSAGE_COUNT = 3000;
 const ALICE_USER_ID = 1;
 
 const { pool, waitForMysql } = await import('../../db/mysql.ts');
-const { LIST_CONVERSATIONS_SQL } = await import('../conversations.ts');
+const { LIST_CONVERSATIONS_SQL } = await import('../../services/conversations.ts');
 
 type ExplainRow = {
   table: string | null;
