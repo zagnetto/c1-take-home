@@ -4,7 +4,7 @@ import { requireSession } from '../middleware/session.ts';
 import { asyncHandler } from '../middleware/errorHandler.ts';
 import { MAX_CONVERSATION_TITLE_LENGTH } from '../constants/conversations.ts';
 import { isDuplicateTitleError } from '../helpers/mysqlErrors.ts';
-import { parsePositiveInt, sanitizeConversationTitle } from '../validation/messageInput.ts';
+import { parsePositiveInt, sanitizeConversationTitle } from '../helpers/validation/messageInput.ts';
 
 export const conversationsRouter = express.Router();
 

@@ -12,7 +12,7 @@ import {
   parseClientId,
   parsePositiveInt,
   sanitizeMessageBody,
-} from '../validation/messageInput.ts';
+} from '../helpers/validation/messageInput.ts';
 
 export const messagesRouter = express.Router();
 

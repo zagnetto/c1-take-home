@@ -1,5 +1,5 @@
-import { MAX_CONVERSATION_TITLE_LENGTH } from '../constants/conversations.ts';
-import { MAX_MESSAGE_BODY_LENGTH } from '../constants/messages.ts';
+import { MAX_CONVERSATION_TITLE_LENGTH } from '../../constants/conversations.ts';
+import { MAX_MESSAGE_BODY_LENGTH } from '../../constants/messages.ts';
 
 /** Reject values that would become NaN in SQL parameters (e.g. "12abc", 0, floats). */
 export function parsePositiveInt(value: unknown): number | null {

@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const appJs = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), '../../../web/app.js'),
+  join(dirname(fileURLToPath(import.meta.url)), '../../../../web/app.js'),
   'utf8',
 );
 

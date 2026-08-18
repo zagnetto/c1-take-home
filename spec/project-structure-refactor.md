@@ -252,10 +252,15 @@ still drops duplicated `BASE` / cookie name / availability probes.
 | Current | Target |
 |---|---|
 | `src/validation/messageInput.ts` | `src/helpers/validation/messageInput.ts` |
-| `src/validation/messageInput.test.ts` | `src/helpers/validation/tests/messageInput.test.ts` |
+| `src/validation/tests/messageInput.test.ts` | `src/helpers/validation/tests/messageInput.test.ts` |
+| `src/validation/tests/web-xss-sinks.test.ts` | `src/helpers/validation/tests/web-xss-sinks.test.ts` |
 
 Imports change from `../validation/messageInput.ts` → `../helpers/validation/messageInput.ts`
 (or relative equivalent). Delete empty `src/validation/` after migration.
+
+#### Phase 3 status
+
+- **Done** — see `docs/023-project-structure-refactor-phase3.md`.
 
 ### Phase 4 — services (persistence extraction)
 
