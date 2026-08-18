@@ -37,7 +37,8 @@ export async function create(req: Request, res: Response) {
     return res.status(400).json({ error: 'participantIds must contain positive integers only' });
   }
 
-  const ids = [...new Set([selfId, ...parsedIds])];
+  const validIds = parsedIds.filter((id): id is number => id != null);
+  const ids = [...new Set([selfId, ...validIds])];
 
   if (await findConversationIdByTitle(title)) {
     return res.status(409).json({ error: 'a conversation with this title already exists' });

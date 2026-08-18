@@ -1,4 +1,4 @@
-import type { Pool } from 'mysql2/promise';
+import type { Pool, RowDataPacket } from 'mysql2/promise';
 import type { Db } from 'mongodb';
 import { pool } from './mysql.ts';
 
@@ -33,7 +33,10 @@ const SENDER_CLIENT_ID_INDEX = {
 } as const;
 
 async function mysqlIndexExists(mysqlPool: Pool, table: string, name: string): Promise<boolean> {
-  const [rows] = await mysqlPool.query<Array<{ cnt: number }>>(
+  interface CountRow extends RowDataPacket {
+    cnt: number;
+  }
+  const [rows] = await mysqlPool.query<CountRow[]>(
     `SELECT COUNT(*) AS cnt
      FROM information_schema.statistics
      WHERE table_schema = DATABASE()

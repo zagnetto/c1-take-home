@@ -1,6 +1,7 @@
 import '../../testHelpers/hostEnv.ts';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { after, afterEach, before, test } from 'node:test';
 import {
   cleanupHttpTestSessions,
@@ -21,10 +22,14 @@ const ALICE_USER_ID = 1;
 const { pool, waitForMysql } = await import('../../db/mysql.ts');
 const { LIST_CONVERSATIONS_SQL } = await import('../../services/conversations.ts');
 
-type ExplainRow = {
+type ExplainRow = RowDataPacket & {
   table: string | null;
   rows: number;
 };
+
+interface CountRow extends RowDataPacket {
+  n: number;
+}
 
 before(async () => {
   await initHttpTestCleanup();
@@ -89,7 +94,10 @@ test('GET /api/conversations aggregates only the current user conversations', as
   let foreignConversationId: number | undefined;
 
   try {
-    const [created] = await pool.execute('INSERT INTO conversations (title) VALUES (?)', [title]);
+    const [created] = await pool.execute<ResultSetHeader>(
+      'INSERT INTO conversations (title) VALUES (?)',
+      [title],
+    );
     foreignConversationId = created.insertId;
     await pool.execute(
       'INSERT INTO conversation_participants (conversation_id, user_id) VALUES (?, ?)',
@@ -97,11 +105,11 @@ test('GET /api/conversations aggregates only the current user conversations', as
     );
     await bulkInsertMessages(foreignConversationId, 3, FOREIGN_MESSAGE_COUNT);
 
-    const [totalRows] = await pool.query<Array<{ n: number }>>('SELECT COUNT(*) AS n FROM messages');
+    const [totalRows] = await pool.query<CountRow[]>('SELECT COUNT(*) AS n FROM messages');
     const totalMessages = Number(totalRows[0]?.n ?? 0);
     assert.ok(totalMessages >= FOREIGN_MESSAGE_COUNT + 3, 'fixture must include many foreign messages');
 
-    const [userScopedRows] = await pool.query<Array<{ n: number }>>(
+    const [userScopedRows] = await pool.query<CountRow[]>(
       `SELECT COUNT(*) AS n
        FROM messages m
        INNER JOIN conversation_participants cp

@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { promisify } from 'node:util';
+import type { RowDataPacket } from 'mysql2/promise';
 import { pool } from '../db/mysql.ts';
 import { mongo } from '../db/mongo.ts';
 import { buildMessagesPage, type MessagesPageResponse } from '../helpers/pagination.ts';
@@ -150,7 +151,7 @@ async function rollbackMessageRow(id: number): Promise<void> {
   }
 }
 
-type MessageListRow = {
+type MessageListRow = RowDataPacket & {
   id: number;
   conversationId: number;
   senderId: number;
@@ -184,9 +185,12 @@ export async function listMessages(input: {
 
   const ids = pageRows.map((r) => r.id);
   const bodies = ids.length
-    ? await mongo().collection('message_bodies').find({ _id: { $in: ids } }).toArray()
+    ? await mongo()
+        .collection('message_bodies')
+        .find({ _id: { $in: ids as never } })
+        .toArray()
     : [];
-  const bodyById = new Map(bodies.map((b) => [b._id, b.body]));
+  const bodyById = new Map(bodies.map((b) => [b._id as unknown as number, String(b.body)]));
 
   return {
     messages: pageRows.map((r) => ({ ...r, body: bodyById.get(r.id) ?? '' })),

@@ -61,8 +61,8 @@ test('createMessage rolls back MySQL row when Mongo insert fails', async (t) => 
         throw new Error('simulated mongo insert failure');
       },
       findOne: coll.findOne.bind(coll),
-    } as Collection<MessageBodyDoc>;
-  };
+    } as unknown as Collection<MessageBodyDoc>;
+  } as typeof db.collection;
 
   try {
     await assert.rejects(

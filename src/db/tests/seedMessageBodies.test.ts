@@ -1,19 +1,22 @@
 import assert from 'node:assert/strict';
+import type { Collection, Document, InsertManyResult } from 'mongodb';
 import { test } from 'node:test';
 import { seedMessageBodies } from '../../../docker/db/seedMessageBodies.ts';
 
 function mockCollection(existingCount: number) {
   let insertCalled = false;
-  return {
-    collection: {
-      async countDocuments() {
-        return existingCount;
-      },
-      async insertMany(docs: unknown[]) {
-        insertCalled = true;
-        assert.equal(docs.length, 3);
-      },
+  const collection = {
+    async countDocuments() {
+      return existingCount;
     },
+    async insertMany(docs: readonly unknown[]): Promise<InsertManyResult<Document>> {
+      insertCalled = true;
+      assert.equal(docs.length, 3);
+      return { acknowledged: true, insertedCount: docs.length, insertedIds: {} };
+    },
+  } satisfies Pick<Collection, 'countDocuments' | 'insertMany'>;
+  return {
+    collection,
     wasInsertCalled: () => insertCalled,
   };
 }

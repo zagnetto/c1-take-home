@@ -5,7 +5,7 @@ type AsyncRouteHandler = (
   req: Request,
   res: Response,
   next: NextFunction,
-) => void | Promise<void>;
+) => unknown;
 
 /** Express 4 does not catch rejected promises in async handlers — forward them to error middleware. */
 export function asyncHandler(fn: AsyncRouteHandler) {

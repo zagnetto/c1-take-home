@@ -1,3 +1,4 @@
+import type { RowDataPacket } from 'mysql2/promise';
 import { pool } from '../db/mysql.ts';
 
 export type ConversationListItem = {
@@ -11,7 +12,7 @@ export type ConversationListItem = {
   } | null;
 };
 
-type ConversationRow = {
+type ConversationRow = RowDataPacket & {
   id: number;
   title: string;
   messageCount: number | string;
@@ -44,7 +45,10 @@ export const LIST_CONVERSATIONS_SQL = `
   ORDER BY c.id ASC`;
 
 export async function findConversationIdByTitle(title: string): Promise<number | null> {
-  const [rows] = await pool.query<Array<{ id: number }>>(
+  interface IdRow extends RowDataPacket {
+    id: number;
+  }
+  const [rows] = await pool.query<IdRow[]>(
     'SELECT id FROM conversations WHERE title = ? LIMIT 1',
     [title],
   );

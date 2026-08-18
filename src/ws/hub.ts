@@ -121,6 +121,7 @@ export function attachWs(server: Server): void {
   });
 
   heartbeatTimer = setInterval(() => {
+    if (!wss) return;
     for (const ws of wss.clients) {
       const client = ws as Client;
       if (client.isAlive === false) {
