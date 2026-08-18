@@ -10,6 +10,10 @@
     #sidebar header { display: flex; align-items: center; justify-content: space-between; padding: 12px; gap: 8px; }
     #sidebar h2 { font-size: 13px; text-transform: uppercase; color: #888; margin: 0; flex: 1; }
     #userBadge { font-size: 12px; color: #334; background: #eef4ff; padding: 4px 8px; border-radius: 999px; white-space: nowrap; }
+    #wsStatus { font-size: 11px; padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
+    #wsStatus[data-state='connected'] { color: #1a7f37; background: #dafbe1; }
+    #wsStatus[data-state='reconnecting'] { color: #9a6700; background: #fff8c5; }
+    #wsStatus[data-state='disconnected'] { color: #cf222e; background: #ffebe9; }
     #newConv { font-size: 13px; cursor: pointer; }
     #conversations { list-style: none; margin: 0; padding: 0; }
     #conversations li { padding: 12px; cursor: pointer; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
@@ -36,6 +40,7 @@
   <div id="sidebar">
     <header>
       <h2>Conversations</h2>
+      <span id="wsStatus" data-state="disconnected">Offline</span>
       <span id="userBadge">…</span>
       <button id="newConv">+ New</button>
     </header>

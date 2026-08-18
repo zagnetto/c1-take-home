@@ -1,6 +1,10 @@
 let userId;
 let userName;
 let ws;
+let wsIntentionalClose = false;
+let wsReconnectAttempt = 0;
+let wsReconnectTimer = null;
+let wsNeedsResync = false;
 let activeConversation;
 let conversations = [];
 let oldestLoadedId = null;
@@ -12,7 +16,7 @@ let sendInFlight = false;
 const MESSAGE_PAGE_LIMIT = 50;
 
 function setComposerEnabled(enabled) {
-  document.getElementById('text').disabled = !enabled;
+  // Keep #text enabled during send so Enter-submit does not steal focus (sendInFlight blocks dupes).
   document.getElementById('sendBtn').disabled = !enabled;
 }
 
@@ -50,7 +54,91 @@ async function loadConversations() {
   const res = await fetch('/api/conversations', fetchOpts);
   conversations = await res.json();
   renderSidebar();
-  connectWs();
+  connectWs({ replace: true });
+}
+
+function setWsStatus(state) {
+  const el = document.getElementById('wsStatus');
+  if (!el) return;
+  el.dataset.state = state;
+  const labels = { connected: 'Live', reconnecting: 'Reconnecting…', disconnected: 'Offline' };
+  el.textContent = labels[state] ?? state;
+}
+
+function scheduleWsReconnect() {
+  if (wsIntentionalClose || wsReconnectTimer) return;
+  const base = Math.min(30_000, 1000 * 2 ** wsReconnectAttempt);
+  const jitter = Math.floor(Math.random() * 500);
+  wsReconnectAttempt += 1;
+  setWsStatus('reconnecting');
+  wsReconnectTimer = setTimeout(() => {
+    wsReconnectTimer = null;
+    connectWs();
+  }, base + jitter);
+}
+
+async function resyncAfterReconnect() {
+  const res = await fetch('/api/conversations', fetchOpts);
+  conversations = await res.json();
+  renderSidebar();
+  if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'subscribe', conversationIds: conversations.map((c) => c.id) }));
+  }
+  if (activeConversation) {
+    const c = conversations.find((x) => x.id === activeConversation);
+    await openConversation(activeConversation, c?.title ?? `#${activeConversation}`);
+  }
+}
+
+function connectWs({ replace = false } = {}) {
+  if (wsReconnectTimer) {
+    clearTimeout(wsReconnectTimer);
+    wsReconnectTimer = null;
+  }
+  if (replace && ws) {
+    wsIntentionalClose = true;
+    ws.close();
+    wsIntentionalClose = false;
+  }
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+
+  const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${scheme}://${location.host}/`);
+  ws.onopen = async () => {
+    wsReconnectAttempt = 0;
+    setWsStatus('connected');
+    ws.send(JSON.stringify({ type: 'subscribe', conversationIds: conversations.map((c) => c.id) }));
+    if (wsNeedsResync) {
+      wsNeedsResync = false;
+      try {
+        await resyncAfterReconnect();
+      } catch {
+        setWsStatus('disconnected');
+        scheduleWsReconnect();
+      }
+    }
+  };
+  ws.onmessage = (ev) => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type !== 'message') return;
+    const c = conversations.find((x) => x.id === msg.conversationId);
+    if (c) c.messageCount += 1;
+    if (msg.conversationId === activeConversation) {
+      appendMessage(msg);
+    } else if (c) {
+      c.unread = true;
+    }
+    renderSidebar();
+  };
+  ws.onclose = () => {
+    if (wsIntentionalClose) return;
+    setWsStatus('disconnected');
+    wsNeedsResync = true;
+    scheduleWsReconnect();
+  };
+  ws.onerror = () => {
+    /* close handler runs next */
+  };
 }
 
 function renderSidebar() {
@@ -64,25 +152,6 @@ function renderSidebar() {
     li.onclick = () => openConversation(c.id, c.title);
     list.appendChild(li);
   }
-}
-
-function connectWs() {
-  if (ws) ws.close();
-  ws = new WebSocket(`ws://${location.host}/`);
-  ws.onopen = () =>
-    ws.send(JSON.stringify({ type: 'subscribe', conversationIds: conversations.map((c) => c.id) }));
-  ws.onmessage = (ev) => {
-    const msg = JSON.parse(ev.data);
-    if (msg.type !== 'message') return;
-    const c = conversations.find((x) => x.id === msg.conversationId);
-    if (c) c.messageCount += 1;
-    if (msg.conversationId === activeConversation) {
-      appendMessage(msg);
-    } else if (c) {
-      c.unread = true;
-    }
-    renderSidebar();
-  };
 }
 
 function renderEarlierHint() {
@@ -193,6 +262,7 @@ document.getElementById('composer').onsubmit = async (e) => {
   } finally {
     sendInFlight = false;
     setComposerEnabled(true);
+    input.focus();
   }
 };
 
