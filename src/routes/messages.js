@@ -16,15 +16,15 @@ messagesRouter.post('/', requireSession, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'conversationId and body are required' });
   }
 
-  const msg = await createMessage({
+  const { message: msg, isNew } = await createMessage({
     conversationId: Number(conversationId),
     senderId,
     body: String(body),
     clientId: clientId ?? null,
   });
 
-  void broadcast(msg.conversationId, { type: 'message', ...msg });
-  res.status(201).json(msg);
+  if (isNew) void broadcast(msg.conversationId, { type: 'message', ...msg });
+  res.status(isNew ? 201 : 200).json(msg);
 }));
 
 messagesRouter.get('/', asyncHandler(async (req, res) => {

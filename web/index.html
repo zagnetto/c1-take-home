@@ -22,6 +22,12 @@
     .msg { padding: 6px 0; }
     #composer { display: flex; border-top: 1px solid #ddd; padding: 8px; gap: 8px; }
     #text { flex: 1; padding: 8px; }
+    #composer button:disabled,
+    #composer input:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      background: #f3f3f3;
+    }
     #searchForm { padding: 0 12px 12px; }
     #search { width: 100%; box-sizing: border-box; padding: 6px 8px; }
   </style>
@@ -41,7 +47,7 @@
     <div id="messages"></div>
     <form id="composer">
       <input id="text" autocomplete="off" placeholder="Message…" />
-      <button>Send</button>
+      <button type="submit" id="sendBtn">Send</button>
     </form>
   </div>
   <script src="/app.js"></script>

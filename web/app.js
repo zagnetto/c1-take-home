@@ -7,7 +7,14 @@ let oldestLoadedId = null;
 let loadingOlder = false;
 let hasMoreMessages = false;
 
+let sendInFlight = false;
+
 const MESSAGE_PAGE_LIMIT = 50;
+
+function setComposerEnabled(enabled) {
+  document.getElementById('text').disabled = !enabled;
+  document.getElementById('sendBtn').disabled = !enabled;
+}
 
 const fetchOpts = { credentials: 'same-origin' };
 
@@ -160,20 +167,33 @@ document.getElementById('messages').addEventListener('scroll', (ev) => {
 
 document.getElementById('composer').onsubmit = async (e) => {
   e.preventDefault();
+  if (sendInFlight) return;
   const input = document.getElementById('text');
   const body = input.value.trim();
   if (!body || !activeConversation) return;
+
+  const clientId = crypto.randomUUID();
   input.value = '';
-  await fetch('/api/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    ...fetchOpts,
-    body: JSON.stringify({
-      conversationId: activeConversation,
-      body,
-      clientId: crypto.randomUUID(),
-    }),
-  });
+  sendInFlight = true;
+  setComposerEnabled(false);
+
+  try {
+    await fetch('/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      ...fetchOpts,
+      body: JSON.stringify({
+        conversationId: activeConversation,
+        body,
+        clientId,
+      }),
+    });
+  } catch {
+    input.value = body;
+  } finally {
+    sendInFlight = false;
+    setComposerEnabled(true);
+  }
 };
 
 document.getElementById('newConv').onclick = async () => {
