@@ -27,19 +27,22 @@
   Mongo, централізовані помилки, коректне завершення процесу.
 - **Realtime між інстансами** — Redis pub/sub + кімнати WebSocket; heartbeat, backpressure,
   перепідключення клієnta.
-- **Сесії** (cookie + Redis), перевірка доступу до розмов на HTTP і WS, rate limiting.
+- **Сесії** (cookie + Redis), перевірка доступу до розмов на HTTP і WS.
 - Індекси в БД, пагінація повідomлень, оптимізація списку розмов, санітизація назв, idempotent seed.
 
 ### Що створив
 
-З задач у [`tasks/`](tasks/):
+Усі **чотири** задачі з [`tasks/`](tasks/):
 
-- **Пошук** по тексту повідomлень (`GET /api/search`).
-- **Rate limiting** на надсилання (5 msg / 10 sec / user / розмова).
-- **Typing indicator** — «користувач друкує…» через WebSocket.
+| Задача | Що зроблено |
+|---|---|
+| [`multi-instance`](tasks/multi-instance.md) | Live-події при `--scale api=3` — Redis pub/sub, WS-кімнати. **Закрито на етапі багфіксингу** (R6), не окремим «feature»-спринтом — див. [`docs/002-multi-instance-realtime.md`](docs/002-multi-instance-realtime.md). |
+| [`search`](tasks/search.md) | `GET /api/search`, Mongo `$text`, пошук у sidebar. |
+| [`rate-limiting`](tasks/rate-limiting.md) | Ліміт надсилання — 5 msg / 10 sec / user / розмова, Redis Lua. |
+| [`typing-indicator`](tasks/typing-indicator.md) | «Користувач друкує…» через WebSocket + Redis fan-out. |
 
-Додатково: рефакторинг у шари routes → controllers → services, TypeScript, тести; рішення
-зафіксовані в [`docs/`](docs/) та [`spec/`](spec/).
+Додатково (не з `tasks/`): рефакторинг у шари routes → controllers → services, TypeScript, тести;
+рішення зафіксовані в [`docs/`](docs/) та [`spec/`](spec/).
 
 ---
 
