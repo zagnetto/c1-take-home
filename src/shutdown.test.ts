@@ -1,9 +1,34 @@
+import './testHelpers/hostEnv.ts';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { test } from 'node:test';
+import Redis from 'ioredis';
 import WebSocket from 'ws';
+import { config } from './config.ts';
 import { createGracefulShutdown } from './shutdown.ts';
+import {
+  clearRedisSessionKeys,
+  seedRedisSession,
+  wsConnectHeaders,
+} from './testHelpers/wsSession.ts';
 import { attachWs, closeWsServer } from './ws/hub.ts';
+
+async function redisAvailable(): Promise<boolean> {
+  const probe = new Redis(config.redisUrl, {
+    maxRetriesPerRequest: 1,
+    connectTimeout: 1000,
+    lazyConnect: true,
+  });
+  try {
+    await probe.connect();
+    await probe.ping();
+    await probe.quit();
+    return true;
+  } catch {
+    await probe.quit().catch(() => undefined);
+    return false;
+  }
+}
 
 function listen(server: http.Server): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -66,7 +91,12 @@ test('gracefulShutdown waits for in-flight HTTP before closing dependencies', as
   assert.deepEqual(closed, ['ws', 'mysql', 'mongo', 'redis']);
 });
 
-test('gracefulShutdown closes WebSocket clients with code 1001', async () => {
+test('gracefulShutdown closes WebSocket clients with code 1001', async (t) => {
+  if (!(await redisAvailable())) {
+    t.skip('Redis not reachable — run docker compose up -d redis');
+    return;
+  }
+
   const server = http.createServer((_req, res) => {
     res.writeHead(404);
     res.end();
@@ -75,7 +105,12 @@ test('gracefulShutdown closes WebSocket clients with code 1001', async () => {
   const port = await listen(server);
   attachWs(server);
 
-  const ws = new WebSocket(`ws://127.0.0.1:${port}/`);
+  const redis = new Redis(config.redisUrl, { maxRetriesPerRequest: 1, connectTimeout: 2000 });
+  const session = await seedRedisSession(1, redis);
+
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/`, {
+    headers: wsConnectHeaders(session.cookie, port),
+  });
   await new Promise<void>((resolve, reject) => {
     ws.once('open', () => resolve());
     ws.once('error', reject);
@@ -100,6 +135,9 @@ test('gracefulShutdown closes WebSocket clients with code 1001', async () => {
 
   assert.equal(closed.code, 1001);
   assert.equal(closed.reason, 'server shutting down');
+
+  await clearRedisSessionKeys(redis, session.keys);
+  await redis.quit();
 });
 
 test('gracefulShutdown rejects when shutdown exceeds timeout', async () => {

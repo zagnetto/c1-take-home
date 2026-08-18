@@ -12,9 +12,7 @@ function wait(ms: number): Promise<void> {
 
 async function stackAvailable(): Promise<boolean> {
   try {
-    const res = await fetch(`${BASE}/api/conversations?userId=1`, {
-      signal: AbortSignal.timeout(2000),
-    });
+    const res = await fetch(`${BASE}/`, { signal: AbortSignal.timeout(2000) });
     return res.ok;
   } catch {
     return false;
@@ -163,12 +161,7 @@ test('GET /api/conversations derives userId from session cookie', async (t) => {
   assert.ok(Array.isArray(conversations));
 
   const legacy = await fetch(`${BASE}/api/conversations?userId=${session.userId}`);
-  const legacyConversations = (await legacy.json()) as { id: number }[];
-  assert.deepEqual(
-    conversations.map((c) => c.id),
-    legacyConversations.map((c) => c.id),
-    'session-scoped list must match the assigned user conversations',
-  );
+  assert.equal(legacy.status, 401, 'legacy ?userId= must not authenticate without session cookie');
 });
 
 test('POST /api/messages derives senderId from session and ignores client senderId', async (t) => {

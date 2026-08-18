@@ -3,6 +3,7 @@ import { createMessage } from '../services/messages.ts';
 import { pool } from '../db/mysql.ts';
 import { mongo } from '../db/mongo.ts';
 import { broadcast } from '../ws/hub.ts';
+import { requireConversationAccess } from '../middleware/conversationAccess.ts';
 import { requireSession } from '../middleware/session.ts';
 import { asyncHandler } from '../middleware/errorHandler.ts';
 import { parseLimit, buildMessagesPage } from './messagesPagination.ts';
@@ -15,7 +16,11 @@ import {
 
 export const messagesRouter = express.Router();
 
-messagesRouter.post('/', requireSession, asyncHandler(async (req, res) => {
+messagesRouter.post(
+  '/',
+  requireSession,
+  requireConversationAccess({ source: 'body' }),
+  asyncHandler(async (req, res) => {
   const conversationId = parsePositiveInt(req.body?.conversationId);
   if (conversationId == null) {
     return res.status(400).json({ error: 'conversationId must be a positive integer' });
@@ -46,9 +51,14 @@ messagesRouter.post('/', requireSession, asyncHandler(async (req, res) => {
 
   if (isNew) void broadcast(msg.conversationId, { type: 'message', ...msg });
   res.status(isNew ? 201 : 200).json(msg);
-}));
+  }),
+);
 
-messagesRouter.get('/', asyncHandler(async (req, res) => {
+messagesRouter.get(
+  '/',
+  requireSession,
+  requireConversationAccess({ source: 'query' }),
+  asyncHandler(async (req, res) => {
   const conversationId = Number(req.query.conversationId);
   if (!Number.isInteger(conversationId) || conversationId <= 0) {
     return res.status(400).json({ error: 'conversationId must be a positive integer' });
@@ -95,4 +105,5 @@ messagesRouter.get('/', asyncHandler(async (req, res) => {
     hasMore,
     nextBefore,
   });
-}));
+  }),
+);

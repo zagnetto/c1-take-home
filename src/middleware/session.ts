@@ -46,30 +46,6 @@ export function requireSession(req: Request, res: Response, next: NextFunction):
   })().catch(next);
 }
 
-/** Session cookie wins; falls back to ?userId= for legacy callers. */
-export function sessionOrQueryUserId(req: Request, res: Response, next: NextFunction): void {
-  void (async () => {
-    const token = sessionTokenFromRequest(req);
-    if (token) {
-      const user = await lookupSession(token);
-      if (user) {
-        req.sessionUser = user;
-        next();
-        return;
-      }
-    }
-
-    const userId = Number(req.query.userId);
-    if (!Number.isInteger(userId) || userId <= 0) {
-      res.status(401).json({ error: 'session or userId is required' });
-      return;
-    }
-
-    req.sessionUser = { userId, name: `#${userId}` };
-    next();
-  })().catch(next);
-}
-
 export function setSessionCookie(res: Response, token: string): void {
   const maxAge = config.sessionTtlSeconds;
   res.setHeader(

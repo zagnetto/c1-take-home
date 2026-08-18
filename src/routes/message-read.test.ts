@@ -1,10 +1,16 @@
+import '../testHelpers/hostEnv.ts';
 import assert from 'node:assert/strict';
-import { after, test } from 'node:test';
-import Redis from 'ioredis';
-import { config } from '../config.ts';
+import { after, afterEach, before, test } from 'node:test';
+import {
+  cleanupHttpTestSessions,
+  closeHttpTestCleanup,
+  createSessionAs,
+  initHttpTestCleanup,
+  redisAvailable,
+  stackAvailable,
+} from '../testHelpers/httpSession.ts';
 
 const BASE = process.env.RELAY_TEST_URL ?? 'http://localhost:3000';
-const SESSION_COOKIE = 'relay_session';
 
 type MessagesPage = {
   messages: Array<{ id: number; body?: string }>;
@@ -12,38 +18,16 @@ type MessagesPage = {
   nextBefore: number | null;
 };
 
-async function stackAvailable(): Promise<boolean> {
-  try {
-    const res = await fetch(`${BASE}/api/conversations?userId=1`, {
-      signal: AbortSignal.timeout(2000),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
+before(async () => {
+  await initHttpTestCleanup();
+});
 
-async function redisAvailable(): Promise<boolean> {
-  const probe = new Redis(config.redisUrl, {
-    maxRetriesPerRequest: 1,
-    connectTimeout: 1000,
-    lazyConnect: true,
-  });
-  try {
-    await probe.connect();
-    await probe.ping();
-    await probe.quit();
-    return true;
-  } catch {
-    await probe.quit().catch(() => undefined);
-    return false;
-  }
-}
-
-let cleanupRedis: Redis | undefined;
+afterEach(async () => {
+  await cleanupHttpTestSessions();
+});
 
 after(async () => {
-  await cleanupRedis?.quit();
+  await closeHttpTestCleanup();
 });
 
 test('GET /api/conversations returns messageCount and lastMessage in one response', async (t) => {
@@ -51,8 +35,20 @@ test('GET /api/conversations returns messageCount and lastMessage in one respons
     t.skip('API stack not reachable — run docker compose up');
     return;
   }
+  if (!(await redisAvailable())) {
+    t.skip('Redis not reachable');
+    return;
+  }
 
-  const res = await fetch(`${BASE}/api/conversations?userId=1`);
+  const alice = await createSessionAs(1);
+  if (!alice) {
+    t.skip('could not claim seeded user 1');
+    return;
+  }
+
+  const res = await fetch(`${BASE}/api/conversations`, {
+    headers: { Cookie: alice.cookie },
+  });
   assert.equal(res.status, 200);
   const conversations = (await res.json()) as Array<{
     id: number;
@@ -74,15 +70,27 @@ test('GET /api/messages returns paginated page object in ascending order', async
     t.skip('API stack not reachable — run docker compose up');
     return;
   }
+  if (!(await redisAvailable())) {
+    t.skip('Redis not reachable');
+    return;
+  }
 
-  const allRes = await fetch(`${BASE}/api/messages?conversationId=1&limit=200`);
+  const alice = await createSessionAs(1);
+  if (!alice) {
+    t.skip('could not claim seeded user 1');
+    return;
+  }
+
+  const auth = { headers: { Cookie: alice.cookie } };
+
+  const allRes = await fetch(`${BASE}/api/messages?conversationId=1&limit=200`, auth);
   assert.equal(allRes.status, 200);
   const all = (await allRes.json()) as MessagesPage;
   assert.ok(Array.isArray(all.messages));
   assert.equal(typeof all.hasMore, 'boolean');
   assert.ok(all.messages.length >= 2);
 
-  const pageRes = await fetch(`${BASE}/api/messages?conversationId=1&limit=1`);
+  const pageRes = await fetch(`${BASE}/api/messages?conversationId=1&limit=1`, auth);
   assert.equal(pageRes.status, 200);
   const page = (await pageRes.json()) as MessagesPage;
   assert.equal(page.messages.length, 1);
@@ -96,6 +104,7 @@ test('GET /api/messages returns paginated page object in ascending order', async
 
   const olderRes = await fetch(
     `${BASE}/api/messages?conversationId=1&before=${page.messages[0]!.id}&limit=10`,
+    auth,
   );
   assert.equal(olderRes.status, 200);
   const older = (await olderRes.json()) as MessagesPage;
@@ -113,11 +122,23 @@ test('GET /api/messages rejects invalid pagination params', async (t) => {
     t.skip('API stack not reachable — run docker compose up');
     return;
   }
+  if (!(await redisAvailable())) {
+    t.skip('Redis not reachable');
+    return;
+  }
 
-  const badLimit = await fetch(`${BASE}/api/messages?conversationId=1&limit=0`);
+  const alice = await createSessionAs(1);
+  if (!alice) {
+    t.skip('could not claim seeded user 1');
+    return;
+  }
+
+  const auth = { headers: { Cookie: alice.cookie } };
+
+  const badLimit = await fetch(`${BASE}/api/messages?conversationId=1&limit=0`, auth);
   assert.equal(badLimit.status, 400);
 
-  const badBefore = await fetch(`${BASE}/api/messages?conversationId=1&before=abc`);
+  const badBefore = await fetch(`${BASE}/api/messages?conversationId=1&before=abc`, auth);
   assert.equal(badBefore.status, 400);
 });
 
@@ -126,8 +147,20 @@ test('GET /api/messages page messages stay ascending by id', async (t) => {
     t.skip('API stack not reachable — run docker compose up');
     return;
   }
+  if (!(await redisAvailable())) {
+    t.skip('Redis not reachable');
+    return;
+  }
 
-  const res = await fetch(`${BASE}/api/messages?conversationId=1&limit=5`);
+  const alice = await createSessionAs(1);
+  if (!alice) {
+    t.skip('could not claim seeded user 1');
+    return;
+  }
+
+  const res = await fetch(`${BASE}/api/messages?conversationId=1&limit=5`, {
+    headers: { Cookie: alice.cookie },
+  });
   assert.equal(res.status, 200);
   const page = (await res.json()) as MessagesPage;
   for (let i = 1; i < page.messages.length; i++) {

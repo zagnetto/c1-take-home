@@ -1,9 +1,15 @@
 import { WebSocketServer, WebSocket } from 'ws';
-import type { Server } from 'node:http';
+import type { IncomingMessage, Server } from 'node:http';
+import { config } from '../config.ts';
+import { parseCookies } from '../middleware/session.ts';
+import { filterMemberConversationIds } from '../services/conversationAccess.ts';
+import { lookupSession, type SessionUser } from '../services/session.ts';
 import { redis, redisSubscriber } from '../db/redis.ts';
 import { REALTIME_EVENTS_CHANNEL } from '../services/realtimeKeys.ts';
 
-type Client = WebSocket & { subs?: Set<number>; isAlive?: boolean };
+type Client = WebSocket & { subs?: Set<number>; isAlive?: boolean; userId: number };
+
+type UpgradeRequest = IncomingMessage & { sessionUser?: SessionUser };
 
 const rooms = new Map<number, Set<Client>>();
 
@@ -18,6 +24,17 @@ function wsLimits() {
     maxSubscriptions: Number(process.env.WS_MAX_SUBSCRIPTIONS) || 500,
     maxPayloadBytes: Number(process.env.WS_MAX_PAYLOAD_BYTES) || 16_384,
   };
+}
+
+function originAllowed(req: IncomingMessage): boolean {
+  const origin = req.headers.origin;
+  const host = req.headers.host;
+  if (!origin || !host) return false;
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
 }
 
 function addToRoom(conversationId: number, ws: Client): void {
@@ -75,7 +92,33 @@ function deliverToRoom(conversationId: number, payload: unknown, maxBufferedByte
 
 export function attachWs(server: Server): void {
   const limits = wsLimits();
-  wss = new WebSocketServer({ server, maxPayload: limits.maxPayloadBytes });
+  wss = new WebSocketServer({
+    server,
+    maxPayload: limits.maxPayloadBytes,
+    verifyClient: (info, done) => {
+      void (async () => {
+        if (!originAllowed(info.req)) {
+          done(false, 403, 'Forbidden');
+          return;
+        }
+
+        const token = parseCookies(info.req.headers.cookie)[config.sessionCookieName];
+        if (!token) {
+          done(false, 401, 'Unauthorized');
+          return;
+        }
+
+        const user = await lookupSession(token);
+        if (!user) {
+          done(false, 401, 'Unauthorized');
+          return;
+        }
+
+        (info.req as UpgradeRequest).sessionUser = user;
+        done(true);
+      })().catch(() => done(false, 500, 'Internal Server Error'));
+    },
+  });
 
   heartbeatTimer = setInterval(() => {
     for (const ws of wss.clients) {
@@ -94,7 +137,8 @@ export function attachWs(server: Server): void {
     if (heartbeatTimer) clearInterval(heartbeatTimer);
   });
 
-  wss.on('connection', (ws: Client) => {
+  wss.on('connection', (ws: Client, req: UpgradeRequest) => {
+    ws.userId = req.sessionUser!.userId;
     ws.subs = new Set();
     ws.isAlive = true;
 
@@ -104,14 +148,20 @@ export function attachWs(server: Server): void {
       ws.isAlive = true;
     });
     ws.on('message', (raw) => {
-      try {
-        const m = JSON.parse(raw.toString());
-        if (m.type === 'subscribe' && Array.isArray(m.conversationIds)) {
-          setSubscriptions(ws, m.conversationIds.map(Number), limits.maxSubscriptions);
+      void (async () => {
+        try {
+          const m = JSON.parse(raw.toString()) as { type?: string; conversationIds?: unknown };
+          if (m.type === 'subscribe' && Array.isArray(m.conversationIds)) {
+            const allowed = await filterMemberConversationIds(
+              ws.userId,
+              m.conversationIds.map(Number),
+            );
+            setSubscriptions(ws, allowed, limits.maxSubscriptions);
+          }
+        } catch {
+          /* ignore malformed frames */
         }
-      } catch {
-        /* ignore malformed frames */
-      }
+      })();
     });
     ws.on('close', detach);
     ws.on('error', detach);

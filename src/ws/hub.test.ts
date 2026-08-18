@@ -1,3 +1,4 @@
+import '../testHelpers/hostEnv.ts';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { test } from 'node:test';
@@ -5,6 +6,11 @@ import Redis from 'ioredis';
 import WebSocket from 'ws';
 import { config } from '../config.ts';
 import { REALTIME_EVENTS_CHANNEL } from '../services/realtimeKeys.ts';
+import {
+  clearRedisSessionKeys,
+  seedRedisSession,
+  wsConnectHeaders,
+} from '../testHelpers/wsSession.ts';
 import { attachWs, broadcast } from './hub.ts';
 
 function wait(ms: number): Promise<void> {
@@ -36,6 +42,22 @@ function collectMessages(ws: WebSocket): Promise<unknown[]> {
   const frames: unknown[] = [];
   ws.on('message', (raw) => frames.push(JSON.parse(raw.toString())));
   return Promise.resolve(frames);
+}
+
+async function openAuthenticatedWs(
+  port: number,
+  userId: number,
+  redis: Redis,
+): Promise<{ ws: WebSocket; keys: string[] }> {
+  const session = await seedRedisSession(userId, redis);
+  const ws = new WebSocket(`ws://127.0.0.1:${port}`, {
+    headers: wsConnectHeaders(session.cookie, port),
+  });
+  await new Promise<void>((resolve, reject) => {
+    ws.once('open', () => resolve());
+    ws.once('error', reject);
+  });
+  return { ws, keys: session.keys };
 }
 
 test('broadcast publishes to relay:events (R6 publish-only path)', async (t) => {
@@ -90,26 +112,16 @@ test('relay:events delivery reaches subscribed local sockets (R6 + R4 rooms)', a
   assert.ok(address && typeof address === 'object');
   const port = address.port;
 
-  const wsInRoom = new WebSocket(`ws://127.0.0.1:${port}`);
-  const wsOtherRoom = new WebSocket(`ws://127.0.0.1:${port}`);
+  const redis = redisClient();
+  const inRoom = await openAuthenticatedWs(port, 1, redis);
+  const otherRoom = await openAuthenticatedWs(port, 3, redis);
 
-  await Promise.all([
-    new Promise<void>((resolve, reject) => {
-      wsInRoom.once('open', () => resolve());
-      wsInRoom.once('error', reject);
-    }),
-    new Promise<void>((resolve, reject) => {
-      wsOtherRoom.once('open', () => resolve());
-      wsOtherRoom.once('error', reject);
-    }),
-  ]);
+  const inRoomFrames = await collectMessages(inRoom.ws);
+  const otherRoomFrames = await collectMessages(otherRoom.ws);
 
-  const inRoomFrames = await collectMessages(wsInRoom);
-  const otherRoomFrames = await collectMessages(wsOtherRoom);
-
-  wsInRoom.send(JSON.stringify({ type: 'subscribe', conversationIds: [1] }));
-  wsOtherRoom.send(JSON.stringify({ type: 'subscribe', conversationIds: [2] }));
-  await wait(50);
+  inRoom.ws.send(JSON.stringify({ type: 'subscribe', conversationIds: [1] }));
+  otherRoom.ws.send(JSON.stringify({ type: 'subscribe', conversationIds: [2] }));
+  await wait(150);
 
   const payload = {
     type: 'message',
@@ -128,9 +140,11 @@ test('relay:events delivery reaches subscribed local sockets (R6 + R4 rooms)', a
   assert.deepEqual(inRoomFrames[0], payload);
   assert.equal(otherRoomFrames.length, 0, 'subscriber in conversation 2 must not receive the frame');
 
-  wsInRoom.close();
-  wsOtherRoom.close();
+  inRoom.ws.close();
+  otherRoom.ws.close();
+  await clearRedisSessionKeys(redis, [...inRoom.keys, ...otherRoom.keys]);
   await pub.quit();
+  await redis.quit();
   await new Promise<void>((resolve) => server.close(() => resolve()));
 });
 
@@ -154,15 +168,12 @@ test('broadcast via Redis fan-out delivers to local room members including sende
   assert.ok(address && typeof address === 'object');
   const port = address.port;
 
-  const ws = new WebSocket(`ws://127.0.0.1:${port}`);
-  await new Promise<void>((resolve, reject) => {
-    ws.once('open', () => resolve());
-    ws.once('error', reject);
-  });
+  const redis = redisClient();
+  const { ws, keys } = await openAuthenticatedWs(port, 1, redis);
 
   const frames = await collectMessages(ws);
   ws.send(JSON.stringify({ type: 'subscribe', conversationIds: [1] }));
-  await wait(50);
+  await wait(150);
 
   const payload = {
     type: 'message',
@@ -180,5 +191,7 @@ test('broadcast via Redis fan-out delivers to local room members including sende
   assert.deepEqual(frames[0], payload);
 
   ws.close();
+  await clearRedisSessionKeys(redis, keys);
+  await redis.quit();
   await new Promise<void>((resolve) => server.close(() => resolve()));
 });

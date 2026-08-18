@@ -8,9 +8,7 @@ const SESSION_COOKIE = 'relay_session';
 
 async function stackAvailable(): Promise<boolean> {
   try {
-    const res = await fetch(`${BASE}/api/conversations?userId=1`, {
-      signal: AbortSignal.timeout(2000),
-    });
+    const res = await fetch(`${BASE}/`, { signal: AbortSignal.timeout(2000) });
     return res.ok;
   } catch {
     return false;

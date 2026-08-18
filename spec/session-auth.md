@@ -24,9 +24,12 @@ user. Token lookup verifies the user slot still points at the same token.
 | Method | Path | Behaviour |
 |---|---|---|
 | `POST` | `/api/session` | Valid cookie → `200 { userId, name }`. Else claim first free seeded user → `201` + `Set-Cookie: relay_session=…; HttpOnly`. Pool full → `503 { error: 'no users available' }`. |
-| `GET` | `/api/conversations` | Session cookie **or** legacy `?userId=` → list for that user. |
+| `GET` | `/api/conversations` | Session cookie required → list for that user. |
 | `POST` | `/api/conversations` | Session required; caller is always included in `participantIds`. |
-| `POST` | `/api/messages` | Session required; `senderId` from session (body field ignored). |
+| `POST` | `/api/messages` | Session required; `senderId` from session (body field ignored). Membership in `conversationId` required (`404` when absent or foreign). |
+
+`GET /api/messages` also requires session and conversation membership. Legacy `?userId=` was removed in
+`spec/conversation-access.md`.
 
 ### Frontend
 
@@ -39,7 +42,7 @@ user. Token lookup verifies the user slot still points at the same token.
 - New session: `201`, seeded `userId`, HttpOnly cookie.
 - Resume: `200`, same `userId`.
 - Fourth session when 1–3 occupied: `503`.
-- `GET /api/conversations` with cookie matches legacy `?userId=` list.
+- `GET /api/conversations` with cookie returns that user's conversations; `?userId=` without cookie → `401`.
 - `POST /api/messages` uses session `senderId`, not body.
 
 ## Alternatives considered
@@ -59,7 +62,8 @@ user. Token lookup verifies the user slot still points at the same token.
 **Agent proposed**
 - Dual Redis keys (`session:<token>` + `session:user:<id>`) with `SET NX` for atomic slot claim —
   **adopted**.
-- Keep legacy `?userId=` on `GET /api/conversations` for curl/smoke tests — **adopted**.
+- Keep legacy `?userId=` on `GET /api/conversations` for curl/smoke tests — **superseded** by
+  `spec/conversation-access.md` (session-only).
 - 24h TTL to auto-release slots — **adopted**.
 - `#userBadge` pill in sidebar header — **adopted**.
 

@@ -10,9 +10,7 @@ const SESSION_COOKIE = 'relay_session';
 
 async function stackAvailable(): Promise<boolean> {
   try {
-    const res = await fetch(`${BASE}/api/conversations?userId=1`, {
-      signal: AbortSignal.timeout(2000),
-    });
+    const res = await fetch(`${BASE}/`, { signal: AbortSignal.timeout(2000) });
     return res.ok;
   } catch {
     return false;
@@ -153,7 +151,9 @@ test('POST /api/messages stores XSS-safe body and matches GET createdAt', async 
   assert.equal(created.status, 201);
   assert.equal(created.body.body, `safe ${clientId.slice(0, 8)}`);
 
-  const listed = await fetch(`${BASE}/api/messages?conversationId=1&limit=50`);
+  const listed = await fetch(`${BASE}/api/messages?conversationId=1&limit=50`, {
+    headers: { Cookie: session.cookie },
+  });
   assert.equal(listed.status, 200);
   const page = (await listed.json()) as {
     messages: Array<{ id: number; body: string; createdAt: string }>;

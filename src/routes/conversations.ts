@@ -1,6 +1,6 @@
 import express from 'express';
 import { pool } from '../db/mysql.ts';
-import { requireSession, sessionOrQueryUserId } from '../middleware/session.ts';
+import { requireSession } from '../middleware/session.ts';
 import { asyncHandler } from '../middleware/errorHandler.ts';
 import {
   MAX_CONVERSATION_TITLE_LENGTH,
@@ -27,7 +27,7 @@ async function findConversationIdByTitle(title: string): Promise<number | null> 
   return rows[0]?.id ?? null;
 }
 
-conversationsRouter.get('/', sessionOrQueryUserId, asyncHandler(async (req, res) => {
+conversationsRouter.get('/', requireSession, asyncHandler(async (req, res) => {
   const userId = req.sessionUser.userId;
 
   const [rows] = await pool.query(
