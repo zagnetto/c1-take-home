@@ -8,28 +8,38 @@ export const conversationsRouter = express.Router();
 conversationsRouter.get('/', sessionOrQueryUserId, asyncHandler(async (req, res) => {
   const userId = req.sessionUser.userId;
 
-  const [conversations] = await pool.query(
-    `SELECT c.id, c.title
+  const [rows] = await pool.query(
+    `SELECT c.id,
+            c.title,
+            COALESCE(stats.message_count, 0) AS messageCount,
+            m.id AS lastMessageId,
+            m.sender_id AS lastSenderId,
+            m.created_at AS lastCreatedAt
      FROM conversations c
      JOIN conversation_participants p ON p.conversation_id = c.id
+     LEFT JOIN (
+       SELECT conversation_id, COUNT(*) AS message_count, MAX(id) AS last_id
+       FROM messages
+       GROUP BY conversation_id
+     ) stats ON stats.conversation_id = c.id
+     LEFT JOIN messages m ON m.id = stats.last_id
      WHERE p.user_id = ?
      ORDER BY c.id ASC`,
     [userId],
   );
 
-  const result = [];
-  for (const c of conversations) {
-    const [[last]] = await pool.query(
-      `SELECT id, sender_id AS senderId, created_at AS createdAt
-       FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1`,
-      [c.id],
-    );
-    const [[counted]] = await pool.query(
-      'SELECT COUNT(*) AS count FROM messages WHERE conversation_id = ?',
-      [c.id],
-    );
-    result.push({ ...c, lastMessage: last || null, messageCount: counted.count });
-  }
+  const result = rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    messageCount: Number(r.messageCount),
+    lastMessage: r.lastMessageId
+      ? {
+          id: r.lastMessageId,
+          senderId: r.lastSenderId,
+          createdAt: r.lastCreatedAt,
+        }
+      : null,
+  }));
 
   res.json(result);
 }));

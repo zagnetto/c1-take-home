@@ -3,8 +3,23 @@ let userName;
 let ws;
 let activeConversation;
 let conversations = [];
+let oldestLoadedId = null;
+let loadingOlder = false;
+let hasMoreMessages = false;
+
+const MESSAGE_PAGE_LIMIT = 50;
 
 const fetchOpts = { credentials: 'same-origin' };
+
+async function fetchMessagePage(conversationId, { before, limit } = {}) {
+  const params = new URLSearchParams({
+    conversationId: String(conversationId),
+    limit: String(limit ?? MESSAGE_PAGE_LIMIT),
+  });
+  if (before != null) params.set('before', String(before));
+  const res = await fetch(`/api/messages?${params}`, fetchOpts);
+  return res.json();
+}
 
 async function initSession() {
   const res = await fetch('/api/session', { method: 'POST', ...fetchOpts });
@@ -63,28 +78,85 @@ function connectWs() {
   };
 }
 
+function renderEarlierHint() {
+  const pane = document.getElementById('messages');
+  let hint = pane.querySelector('.earlier-hint');
+  if (!hasMoreMessages) {
+    hint?.remove();
+    return;
+  }
+  if (!hint) {
+    hint = document.createElement('div');
+    hint.className = 'msg earlier-hint';
+    hint.style.color = '#888';
+    hint.style.textAlign = 'center';
+    hint.textContent = '↑ scroll up for earlier messages';
+    pane.prepend(hint);
+  }
+}
+
 async function openConversation(id, title) {
   activeConversation = id;
+  oldestLoadedId = null;
+  hasMoreMessages = false;
   const c = conversations.find((x) => x.id === id);
   if (c) c.unread = false;
   renderSidebar();
 
   document.getElementById('title').textContent = title;
-  const res = await fetch(`/api/messages?conversationId=${id}`, fetchOpts);
-  const messages = await res.json();
+  const page = await fetchMessagePage(id, { limit: MESSAGE_PAGE_LIMIT });
   const pane = document.getElementById('messages');
   pane.innerHTML = '';
-  for (const m of messages) appendMessage(m);
+  for (const m of page.messages) appendMessage(m, { scroll: false });
+  oldestLoadedId = page.nextBefore;
+  hasMoreMessages = page.hasMore;
+  renderEarlierHint();
+  pane.scrollTop = pane.scrollHeight;
 }
 
-function appendMessage(m) {
-  const pane = document.getElementById('messages');
+function createMessageElement(m) {
   const div = document.createElement('div');
   div.className = 'msg';
   div.textContent = `#${m.senderId}: ${m.body}`;
-  pane.appendChild(div);
-  pane.scrollTop = pane.scrollHeight;
+  return div;
 }
+
+async function loadOlderMessages() {
+  if (!activeConversation || loadingOlder || !hasMoreMessages || oldestLoadedId == null) return;
+  loadingOlder = true;
+  const pane = document.getElementById('messages');
+  const prevHeight = pane.scrollHeight;
+  const prevTop = pane.scrollTop;
+
+  const page = await fetchMessagePage(activeConversation, {
+    before: oldestLoadedId,
+    limit: MESSAGE_PAGE_LIMIT,
+  });
+  if (page.messages.length) {
+    oldestLoadedId = page.nextBefore;
+    hasMoreMessages = page.hasMore;
+    const fragment = document.createDocumentFragment();
+    for (const m of page.messages) fragment.appendChild(createMessageElement(m));
+    const hint = pane.querySelector('.earlier-hint');
+    if (hint) pane.insertBefore(fragment, hint.nextSibling);
+    else pane.prepend(fragment);
+    pane.scrollTop = prevTop + (pane.scrollHeight - prevHeight);
+  } else {
+    hasMoreMessages = false;
+  }
+  renderEarlierHint();
+  loadingOlder = false;
+}
+
+function appendMessage(m, opts = {}) {
+  const pane = document.getElementById('messages');
+  pane.appendChild(createMessageElement(m));
+  if (opts.scroll !== false) pane.scrollTop = pane.scrollHeight;
+}
+
+document.getElementById('messages').addEventListener('scroll', (ev) => {
+  if (ev.target.scrollTop <= 24) void loadOlderMessages();
+});
 
 document.getElementById('composer').onsubmit = async (e) => {
   e.preventDefault();

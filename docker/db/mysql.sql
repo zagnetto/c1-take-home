@@ -3,7 +3,8 @@ SET NAMES utf8mb4;
 CREATE TABLE users (
   id INT PRIMARY KEY AUTO_INCREMENT,
   name VARCHAR(100) NOT NULL,
-  email VARCHAR(190) NOT NULL
+  email VARCHAR(190) NOT NULL,
+  UNIQUE INDEX idx_users_email (email)
 );
 
 CREATE TABLE conversations (
@@ -15,7 +16,8 @@ CREATE TABLE conversations (
 CREATE TABLE conversation_participants (
   conversation_id INT NOT NULL,
   user_id INT NOT NULL,
-  PRIMARY KEY (conversation_id, user_id)
+  PRIMARY KEY (conversation_id, user_id),
+  INDEX idx_participants_user_id (user_id, conversation_id)
 );
 
 CREATE TABLE messages (
@@ -23,7 +25,9 @@ CREATE TABLE messages (
   conversation_id INT NOT NULL,
   sender_id INT NOT NULL,
   client_id VARCHAR(64) NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_messages_conversation_id (conversation_id, id),
+  UNIQUE INDEX idx_messages_client_id (client_id)
 );
 
 INSERT INTO users (id, name, email) VALUES

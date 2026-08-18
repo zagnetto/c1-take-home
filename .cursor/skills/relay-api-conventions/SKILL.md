@@ -74,6 +74,16 @@ GET /api/messages?conversationId=1&before=<messageId>&limit=50
 Cap `limit` server-side (50 default, 200 max), keyset-paginate on `id`, and return rows in ascending
 id order so the frontend can append without re-sorting.
 
+Response shape:
+
+```json
+{ "messages": [...], "hasMore": true, "nextBefore": 41 }
+```
+
+- `messages` — ascending by `id` within the page
+- `hasMore` — older messages exist before this page
+- `nextBefore` — pass as `before` for the next older page; `null` when empty
+
 ## Frontend contract
 
 `web/` is plain JS served statically with no build, so any response change means editing `web/app.js`
@@ -82,7 +92,7 @@ in the same commit. What it consumes today:
 | Endpoint | Expected by the frontend |
 |---|---|
 | `GET /api/conversations?userId=1` | `[{ id, title, messageCount, lastMessage, unread? }]` — renders `title (messageCount)` and a dot when `unread` is truthy |
-| `GET /api/messages?conversationId=` | `[{ senderId, body, ... }]` in display order |
+| `GET /api/messages?conversationId=` | `{ messages: [{ senderId, body, … }], hasMore, nextBefore }` — ascending within page; scroll up with `before=nextBefore` |
 | `POST /api/messages` | Accepts `{ conversationId, senderId, body, clientId }`; **the response is ignored** — the sent message is only rendered when it arrives back over the WebSocket |
 | `POST /api/conversations` | Accepts `{ title, participantIds }` |
 | `GET /api/search?q=` | `[{ conversationId, conversationTitle, body }]` |

@@ -3,6 +3,7 @@ import express from 'express';
 import { config } from './config.ts';
 import { waitForMysql } from './db/mysql.ts';
 import { connectMongo } from './db/mongo.ts';
+import { ensureIndexes } from './db/ensureIndexes.ts';
 import { waitForRedis } from './db/redis.ts';
 import { conversationsRouter } from './routes/conversations.js';
 import { messagesRouter } from './routes/messages.js';
@@ -24,7 +25,8 @@ const server = http.createServer(app);
 attachWs(server);
 
 await waitForMysql();
-await connectMongo();
+const db = await connectMongo();
+await ensureIndexes(db);
 await waitForRedis();
 await initRedisFanout();
 
