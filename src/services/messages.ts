@@ -123,13 +123,12 @@ export async function createMessage(input: NewMessage): Promise<CreateMessageRes
   const signature = await computeMessageSignature(body);
 
   try {
+    const createdAt = new Date();
     const [res] = await pool.execute(
-      'INSERT INTO messages (conversation_id, sender_id, client_id) VALUES (?, ?, ?)',
-      [conversationId, senderId, clientId],
+      'INSERT INTO messages (conversation_id, sender_id, client_id, created_at) VALUES (?, ?, ?, ?)',
+      [conversationId, senderId, clientId, createdAt],
     );
     const id = (res as { insertId: number }).insertId;
-
-    const createdAt = new Date();
     await mongo().collection('message_bodies').insertOne({
       _id: id as never,
       conversationId,

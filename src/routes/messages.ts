@@ -6,21 +6,42 @@ import { broadcast } from '../ws/hub.ts';
 import { requireSession } from '../middleware/session.ts';
 import { asyncHandler } from '../middleware/errorHandler.ts';
 import { parseLimit, buildMessagesPage } from './messagesPagination.ts';
+import {
+  MAX_MESSAGE_BODY_LENGTH,
+  parseClientId,
+  parsePositiveInt,
+  sanitizeMessageBody,
+} from '../validation/messageInput.ts';
 
 export const messagesRouter = express.Router();
 
 messagesRouter.post('/', requireSession, asyncHandler(async (req, res) => {
-  const { conversationId, body, clientId } = req.body || {};
-  const senderId = req.sessionUser.userId;
-  if (!conversationId || !body) {
-    return res.status(400).json({ error: 'conversationId and body are required' });
+  const conversationId = parsePositiveInt(req.body?.conversationId);
+  if (conversationId == null) {
+    return res.status(400).json({ error: 'conversationId must be a positive integer' });
+  }
+
+  const rawBody = req.body?.body;
+  const body = sanitizeMessageBody(rawBody);
+  if (body == null) {
+    if (typeof rawBody === 'string' && rawBody.trim().length > MAX_MESSAGE_BODY_LENGTH) {
+      return res.status(400).json({
+        error: `body must be at most ${MAX_MESSAGE_BODY_LENGTH} characters`,
+      });
+    }
+    return res.status(400).json({ error: 'body is required and must be non-empty text' });
+  }
+
+  const clientIdParsed = parseClientId(req.body?.clientId);
+  if (clientIdParsed === 'invalid') {
+    return res.status(400).json({ error: 'clientId must be a string up to 64 characters' });
   }
 
   const { message: msg, isNew } = await createMessage({
-    conversationId: Number(conversationId),
-    senderId,
-    body: String(body),
-    clientId: clientId ?? null,
+    conversationId,
+    senderId: req.sessionUser.userId,
+    body,
+    clientId: clientIdParsed,
   });
 
   if (isNew) void broadcast(msg.conversationId, { type: 'message', ...msg });
