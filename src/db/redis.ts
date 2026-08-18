@@ -1,5 +1,6 @@
 import Redis from 'ioredis';
 import { config } from '../config.ts';
+import { REALTIME_EVENTS_CHANNEL } from '../services/realtimeKeys.ts';
 
 function attachRedisErrorLogging(client: Redis, label: string): void {
   client.on('error', (err) => {
@@ -39,4 +40,13 @@ export async function waitForRedis(retries = 40): Promise<void> {
     }
   }
   throw new Error(`redis not reachable: ${lastErr}`);
+}
+
+export async function closeRedis(): Promise<void> {
+  if (subscriber) {
+    await subscriber.unsubscribe(REALTIME_EVENTS_CHANNEL).catch(() => undefined);
+    await subscriber.quit();
+    subscriber = undefined;
+  }
+  await redis.quit();
 }

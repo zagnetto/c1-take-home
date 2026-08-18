@@ -11,6 +11,7 @@ services:
       context: .
       dockerfile: docker/app/Dockerfile
     command: npm start
+    stop_grace_period: 15s
     restart: on-failure
     env_file: .env
     expose: ["3000"]

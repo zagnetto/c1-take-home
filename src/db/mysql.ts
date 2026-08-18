@@ -16,3 +16,7 @@ export async function waitForMysql(retries = 40): Promise<void> {
   }
   throw new Error(`mysql not reachable: ${lastErr}`);
 }
+
+export async function closeMysql(): Promise<void> {
+  await pool.end();
+}

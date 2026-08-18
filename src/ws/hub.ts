@@ -7,6 +7,8 @@ type Client = WebSocket & { subs?: Set<number>; isAlive?: boolean };
 
 const rooms = new Map<number, Set<Client>>();
 
+let wss: WebSocketServer | undefined;
+let heartbeatTimer: NodeJS.Timeout | undefined;
 let fanoutReady: Promise<void> | undefined;
 
 function wsLimits() {
@@ -73,9 +75,9 @@ function deliverToRoom(conversationId: number, payload: unknown, maxBufferedByte
 
 export function attachWs(server: Server): void {
   const limits = wsLimits();
-  const wss = new WebSocketServer({ server, maxPayload: limits.maxPayloadBytes });
+  wss = new WebSocketServer({ server, maxPayload: limits.maxPayloadBytes });
 
-  const heartbeat = setInterval(() => {
+  heartbeatTimer = setInterval(() => {
     for (const ws of wss.clients) {
       const client = ws as Client;
       if (client.isAlive === false) {
@@ -88,7 +90,9 @@ export function attachWs(server: Server): void {
     }
   }, limits.heartbeatMs);
 
-  server.on('close', () => clearInterval(heartbeat));
+  server.on('close', () => {
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+  });
 
   wss.on('connection', (ws: Client) => {
     ws.subs = new Set();
@@ -112,6 +116,26 @@ export function attachWs(server: Server): void {
     ws.on('close', detach);
     ws.on('error', detach);
   });
+}
+
+export async function closeWsServer(): Promise<void> {
+  if (!wss) return;
+
+  for (const ws of wss.clients) {
+    if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+      ws.close(1001, 'server shutting down');
+    }
+  }
+
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = undefined;
+  }
+  rooms.clear();
+}
+
+export function releaseWsServer(): void {
+  wss = undefined;
 }
 
 export async function initRedisFanout(): Promise<void> {

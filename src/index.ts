@@ -9,7 +9,11 @@ import { conversationsRouter } from './routes/conversations.ts';
 import { messagesRouter } from './routes/messages.ts';
 import { searchRouter } from './routes/search.js';
 import { sessionRouter } from './routes/session.ts';
-import { attachWs, initRedisFanout } from './ws/hub.ts';
+import { attachWs, closeWsServer, initRedisFanout, releaseWsServer } from './ws/hub.ts';
+import { closeMysql } from './db/mysql.ts';
+import { closeMongo } from './db/mongo.ts';
+import { closeRedis } from './db/redis.ts';
+import { installGracefulShutdown, shutdownTimeoutMs } from './shutdown.ts';
 import { errorHandler } from './middleware/errorHandler.ts';
 
 const app = express();
@@ -23,6 +27,17 @@ app.use(errorHandler);
 
 const server = http.createServer(app);
 attachWs(server);
+
+installGracefulShutdown({
+  server,
+  closeWebSockets: closeWsServer,
+  releaseWebSockets: releaseWsServer,
+  closeMysql,
+  closeMongo,
+  closeRedis,
+  timeoutMs: shutdownTimeoutMs(),
+  exit: (code) => process.exit(code),
+});
 
 await waitForMysql();
 const db = await connectMongo();
