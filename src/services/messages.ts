@@ -1,6 +1,9 @@
 import crypto from 'node:crypto';
+import { promisify } from 'node:util';
 import { pool } from '../db/mysql.ts';
 import { mongo } from '../db/mongo.ts';
+
+const pbkdf2Async = promisify(crypto.pbkdf2);
 
 export interface NewMessage {
   conversationId: number;
@@ -9,12 +12,15 @@ export interface NewMessage {
   clientId: string | null;
 }
 
+export async function computeMessageSignature(body: string): Promise<string> {
+  const digest = await pbkdf2Async(body, 'relay-signing', 200000, 32, 'sha256');
+  return digest.toString('hex');
+}
+
 export async function createMessage(input: NewMessage) {
   const { conversationId, senderId, body, clientId } = input;
 
-  const signature = crypto
-    .pbkdf2Sync(body, 'relay-signing', 200000, 32, 'sha256')
-    .toString('hex');
+  const signature = await computeMessageSignature(body);
 
   const [res] = await pool.execute(
     'INSERT INTO messages (conversation_id, sender_id, client_id) VALUES (?, ?, ?)',
