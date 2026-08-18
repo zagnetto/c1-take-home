@@ -3,55 +3,71 @@
 > Цей документ згенеровано AI-асистентом (Cursor) за побажанням автора репозиторію. Зміст, акценти
 > та trade-offs узгоджені з ним; технічні факти перевірені по комітах і нотатках у `docs/` / `spec/`.
 
-## Що зроблено
+## Коротка примітка
 
-**Стабілізація під навантаженням.** Прибрано блокування event loop (`pbkdf2` → async), додано
-ідемпотентність надсилання, rollback при збої Mongo після запису в MySQL, rate limiting через Redis
-Lua, graceful shutdown, обробку помилок на межі HTTP.
+Підняв Relay, поганяв під навантаженням і з `--scale api=3`, і правив те, що реально ламалося в
+роботі — не лише по статичному огляду коду.
 
-**Realtime на кількох інстансах.** WebSocket fan-out винесено в Redis pub/sub; кімнати за
-`conversationId`, heartbeat і backpressure на сервері, auto-reconnect і resync на клієнті.
+### Що було зламано
 
-**Безпека та доступ.** Сесії в Redis (cookie, seeded users), перевірка участі в розмові на HTTP і WS,
-scope idempotency на відправника, санітизація та XSS-кодування назв розмов.
+- Під одночасними відправками весь сервер «зависав» — важка операція на кожен POST блокувала
+  обробку всього іншого.
+- Повідомлення могли **дублюватися** при повторному натисканні «Надіслати» або retry.
+- Запис у **дві бази** (MySQL + Mongo) без відкату: у списку є повідomлення, а в чаті — порожня
+  бульбашка.
+- На кількох інстансах **live-оновлення не доходили** до автора — HTTP і WebSocket потрапляли на
+  різні сервери.
+- Не було нормальної **авторизації** і перевірки «чи ти в цій розмові», XSS у назвах чатів,
+  обробки помилок, graceful shutdown.
+- Повільний список розмов (N+1), історія без пагінації, seed стирав Mongo при перезапуску.
 
-**Масштабування читання.** Індекси, згортання N+1 у списку розмов, пагінація повідомлень.
+### Що виправив
 
-**Фічі з `tasks/`.** Пошук (`GET /api/search`, Mongo `$text`), rate limiting, typing indicator.
+- Прискорив відправку (async замість sync), **ідемпотентність** за `clientId`, rollback при збої
+  Mongo, централізовані помилки, коректне завершення процесу.
+- **Realtime між інстансами** — Redis pub/sub + кімнати WebSocket; heartbeat, backpressure,
+  перепідключення клієnta.
+- **Сесії** (cookie + Redis), перевірка доступу до розмов на HTTP і WS, rate limiting.
+- Індекси в БД, пагінація повідomлень, оптимізація списку розмов, санітизація назв, idempotent seed.
 
-**Структура коду.** Рефакторинг у шари routes → controllers → services, TypeScript, co-located тести,
-`package-lock.json` + `npm ci` у Docker.
+### Що створив
 
-Деталі по кожному пункту — у [`docs/`](docs/) та [`spec/`](spec/).
+З задач у [`tasks/`](tasks/):
+
+- **Пошук** по тексту повідomлень (`GET /api/search`).
+- **Rate limiting** на надсилання (5 msg / 10 sec / user / розмова).
+- **Typing indicator** — «користувач друкує…» через WebSocket.
+
+Додатково: рефакторинг у шари routes → controllers → services, TypeScript, тести; рішення
+зафіксовані в [`docs/`](docs/) та [`spec/`](spec/).
+
+---
 
 ## Trade-offs (свідомі компроміси)
 
 | Рішення | Чому так | Ціна |
 |---|---|---|
-| Redis pub/sub для fan-out | Працює без sticky sessions при `--scale api=3` | Немає гарантії доставки; pub/sub не персистить події |
+| Redis pub/sub для fan-out | Працює без sticky sessions при `--scale api=3` | Live-подія може не дійти миттєво; повідomлення не губляться — вони в БД, є resync через HTTP |
 | Envoy `ROUND_ROBIN` | Простий балансер «з коробки» compose | HTTP і WebSocket потрапляють на різні інстанси; для WS це поганий LB — краще affinity або окремий WS-шар |
-| Mongo `$text` для пошуку | Індекс уже був у схемі; швидко для демо | Немає повноцінного FTS (fuzzy, синоніми, ранжування на рівні продукту) — потрібен Elasticsearch / OpenSearch |
-| Rollback DELETE при збої Mongo | Мінімальний fix без нової інфраструктури | Не атомарно: crash між INSERT і DELETE лишає orphan; для продукту — outbox + брокер або Temporal на великих workflow |
-| Сесії з seeded users у Redis | Швидко закриває «хто я» для take-home | Авторизація прикручена базово; у продукті це окрема задача з OIDC/JWT, refresh, RBAC — не mix з бізнес-логікою чату |
+| Mongo `$text` для пошуку | Індекс уже був у схемі; швидко для демо | Немає повноцінного FTS — потрібен Elasticsearch / OpenSearch |
+| Rollback DELETE при збої Mongo | Мінімальний fix без нової інфраструктури | Не атомарно: crash між INSERT і DELETE лишає orphan; для продукту — outbox + брокер або Temporal |
+| Сесії з seeded users у Redis | Швидко закриває «хто я» для take-home | Авторизація базова; у продукті — окрема задача (OIDC/JWT, RBAC) |
 | Dual-write MySQL + Mongo | Успадкована архітектура | Два джерела правди; навіть з rollback залишається клас ризиків розсинхрону |
 
 ## Якби це був продукт
 
-1. **Auth — окремий сервіс і roadmap.** Винести identity (OIDC, JWT, refresh tokens, ролі) з
-   application layer; seeded-user pool лишити лише для dev/staging.
+1. **Auth — окремий сервіс і roadmap.** OIDC/JWT, refresh tokens, ролі; seeded-user pool лише для
+   dev/staging.
 
-2. **Observability з першого дня.** Структуровані логи, метрики (latency, pool, Redis, WS
-   connections), distributed tracing на шляху HTTP → MySQL/Mongo → Redis → WS; CI на кожен PR, не
-   лише pre-push hook.
+2. **Observability з першого дня.** Структуровані логи, метрики, tracing; CI на кожен PR, не лише
+   pre-push hook.
 
-3. **WebSocket-шар.** Замість round-robin перед API — sticky sessions на upgrade або виділений
-   realtime gateway; Redis pub/sub лишити як транспорт між gateway і worker-ами.
+3. **WebSocket-шар.** Sticky sessions на upgrade або виділений realtime gateway; Redis pub/sub —
+   транспорт між gateway і worker-ами.
 
-4. **Пошук.** Elasticsearch/OpenSearch (або Atlas Search) замість Mongo `$text` — relevance,
-   highlight, pagination, аналітика запитів.
+4. **Пошук.** Elasticsearch/OpenSearch замість Mongo `$text`.
 
-5. **Цілісність записів.** Для пар MySQL↔Mongo — transactional outbox і async consumer; Temporal
-   (або інший orchestrator) — коли workflow складніший за один INSERT.
+5. **Цілісність записів.** Transactional outbox + async consumer; Temporal — для складніших workflow.
 
 ---
 
