@@ -1,0 +1,47 @@
+---
+description: Always git-add new files the agent creates during a task — do not leave deliverables untracked
+alwaysApply: true
+---
+
+# Stage New Files
+
+Every file you **create** while working on a task is part of the deliverable. Do not finish
+the task with those files still untracked.
+
+## When to stage
+
+After creating or finishing edits on **new** files, run `git add` on them before ending your
+turn — even when the user has not asked for a commit yet.
+
+This applies to files you authored in the current task, including:
+
+- production code and tests (`src/**`, etc.)
+- `spec/` and `docs/` notes
+- config or scripts you added for the change
+
+## What to skip
+
+Do **not** stage unless the user explicitly asked:
+
+- secrets (`.env`, credentials, tokens)
+- dependency trees (`node_modules/`, vendor caches)
+- local IDE or machine state (`.idea/`, editor swap files) unless the task was to add them
+- generated artifacts the repo normally ignores (check `.gitignore` first)
+
+If unsure whether a path belongs in git, check `.gitignore` and existing repo conventions.
+
+## With commits
+
+When the user asks for a commit, **include every new file you created** for that work. Before
+committing, run `git status` and confirm no task-related untracked files remain.
+
+Do **not** create commits on your own — staging new files does not override the rule to commit
+only when the user asks.
+
+## End-of-task check
+
+Before wrapping up implementation:
+
+1. `git status` — list untracked files you created.
+2. `git add <paths>` — stage all deliverable new files.
+3. Mention in your summary which new files were staged (if any).

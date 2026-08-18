@@ -1,0 +1,62 @@
+---
+description: TDD workflow — test first in one turn, diagnose and propose in the next, implement only after agreement
+alwaysApply: true
+---
+
+# TDD Workflow
+
+Every bug fix and every task from `tasks/` follows three **separate** turns unless the user
+explicitly collapses them ("just do it", "implement now", or similar).
+
+## Phase 1 — Red (test only)
+
+Write or extend a test that captures the expected behaviour. **Do not change production code.**
+
+- **Bug fix:** the test must reproduce the defect and **fail** against current code. Run it and
+  show the failure before stopping.
+- **Feature / task:** the test encodes the agreed contract from the spec (or the user's
+  description if no spec yet). It may fail because the feature is missing — that is expected.
+
+Stop after the test. Summarise what it asserts and what failed. Do not propose or implement a fix
+in the same turn.
+
+Test conventions: `.cursor/skills/relay-dev-workflow/SKILL.md` (§ Tests).
+
+## Phase 2 — Diagnose and propose (no implementation)
+
+Investigate root cause and recommend an approach. Follow
+`.cursor/rules/challenge-proposed-solutions.mdc` — verify the diagnosis, weigh alternatives, ask
+what blocks a decision. **Do not edit production code or make the test pass yet.**
+
+**Create or update** `spec/<slug>.md` with the agreed direction: design, contracts, alternatives,
+and **`## Contributions`** (user's proposal vs agent additions). See
+`.cursor/rules/document-every-change.mdc`.
+
+Stop with a concrete proposal and open questions. Wait for the user to agree, refine, or reject.
+
+## Phase 3 — Green (implement after agreement)
+
+Only after the user confirms the approach (or refines it and confirms again):
+
+1. Implement the agreed fix or feature.
+2. Run the Phase 1 test — it must **pass**.
+3. Write the mandatory record per `.cursor/rules/document-every-change.mdc`.
+
+If the agreed approach differs from what the test expects, update the test **with** the
+implementation and say why.
+
+## Boundaries
+
+- One phase per user message by default. If the user sends a new bug or task, start at Phase 1
+  even if the previous item is mid-flow.
+- Phase 1 may include test helpers or fixtures; it must not include the fix.
+- Phase 3 may include refactors needed for the agreed solution, not speculative clean-up.
+- Trivial reversible changes (typo, rename, comment, log line) skip all three phases.
+
+## What to say at the end of each phase
+
+| Phase | Stop with |
+|---|---|
+| 1 | failing test output, what the test covers, "ready for diagnosis" |
+| 2 | root cause, recommended approach, alternatives, questions, **`spec/<slug>.md` draft** — "ready to implement when you agree" |
+| 3 | passing test output, files changed, pointer to **`docs/NNN-*.md`** and final **`spec/`** |

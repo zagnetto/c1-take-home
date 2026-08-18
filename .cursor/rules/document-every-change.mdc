@@ -1,0 +1,50 @@
+---
+description: Every meaningful change updates spec/ and/or docs/ with what, why, and who proposed what — user vs agent
+alwaysApply: true
+---
+
+# Document Every Change
+
+The written record is a deliverable, not overhead. No bug fix, task, or standalone feature is
+finished until the right files in `spec/` and `docs/` exist and are current. Templates:
+`.cursor/skills/relay-engineering-journal/SKILL.md`.
+
+## What goes where
+
+| Work type | `spec/` | `docs/` |
+|---|---|---|
+| Task from `tasks/` | `spec/<task>.md` **before** code (Phase 2) | `docs/NNN-*.md` **with** the fix (Phase 3) if spec deviated or a non-obvious choice came up |
+| Standalone feature (e.g. session auth, not in `tasks/`) | `spec/<short-slug>.md` **before** code (Phase 2) | `docs/NNN-*.md` **with** the implementation (Phase 3) |
+| Bug fix | Update spec only if the bug touched a documented contract | `docs/NNN-*.md` **with** the fix (Phase 3) |
+| Standalone decision (dependency, schema, convention) | — | `docs/NNN-*.md` when the decision is made |
+
+Continue `docs/` numbering from the highest existing `NNN`. **Update** an existing `spec/` or
+`docs/` file when the same feature or decision evolves; do not start a parallel note unless the
+earlier approach was superseded (link back).
+
+## Mandatory in every `spec/` and `docs/` note
+
+- **What and why** — concrete behaviour and files, not just the outcome.
+- **`## Contributions`** — who proposed what (see skill template). Required in both `spec/` and
+  `docs/`. Update when the user refines the idea or the agent adds/changes something in Phase 2–3.
+- **`## Alternatives considered`** — each option weighed and why it lost.
+- **`## Dead ends`** (in `docs/`) — anything tried and abandoned.
+
+Bug-fix notes also need: symptom, reproduction, root cause (file + line), fix, verification with
+before/after numbers (test red → green).
+
+## TDD alignment
+
+| Phase | Documentation |
+|---|---|
+| 1 — Red | Tests only (`src/**/*.test.ts`). No `spec/` or `docs/` yet unless updating an existing spec's **Contracts** section to match a test the user already agreed on. |
+| 2 — Propose | **Create or update** `spec/<slug>.md`: goal, design, contracts, alternatives, **`## Contributions`**. Confirm with the user before Phase 3. |
+| 3 — Green | Implement; tests pass; **create or update** `docs/NNN-*.md` with what shipped, verification, contributions (final), dead ends. Align `spec/` if the implementation differed. |
+
+Trivial reversible changes (typo, rename, comment, log line) skip documentation.
+
+## Rules of the record
+
+- Commit notes together with the code they describe; reference them in the commit body.
+- About a screenful per note. Never delete a superseded note — write a new one and link back.
+- Tests live in `src/**/*.test.ts`, not in `spec/`. `spec/` holds the human contract; tests enforce it.

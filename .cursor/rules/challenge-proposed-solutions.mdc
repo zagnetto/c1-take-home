@@ -1,0 +1,56 @@
+---
+description: Always evaluate a user-proposed fix or approach before implementing it, and resolve unknowns first
+alwaysApply: true
+---
+
+# Challenge Proposed Solutions
+
+When the user proposes a specific solution for a bug or a task ("fix it by adding an index",
+"let's cache this in memory", "just wrap it in a try/catch"), do **not** start implementing it
+right away. Treat the proposal as a hypothesis to verify, not as an instruction to execute.
+
+## 1. Verify the diagnosis first
+
+Read the actual code paths involved and confirm the proposal targets the real cause. If the
+evidence contradicts it, say so plainly and show the evidence (file, lines, query, log) before
+suggesting anything else.
+
+## 2. Evaluate whether it is the best option
+
+Weigh the proposal against at least one credible alternative, judging by:
+
+- correctness under concurrency, retries, and `--scale api=3` (process-local state, dual writes,
+  idempotency)
+- scope: does it fix the cause or only the symptom
+- cost: added complexity, new dependency, extra round-trips, migration/backfill needs
+- fit with existing repo conventions and the skills in `.cursor/skills/`
+
+If the proposal is the best option, confirm it and briefly say why the alternatives lose.
+If it is not, **say openly that you disagree**, state the concrete failure case the proposal
+misses, and recommend the better option. Do **not** implement your alternative silently or
+assume the user will accept it — wait for explicit agreement.
+
+## 3. Ask before coding, not after
+
+Before implementing a user-proposed approach, ask **all questions needed to fully understand
+the intent** — expected behaviour on edge cases, backward compatibility, data migration, whether
+a change may alter an API response the frontend consumes, acceptable trade-offs, scope boundaries.
+Use the `AskQuestion` tool with concrete options rather than a wall of prose. Do not skip
+questions because the code seems to answer them if the user's intent is still ambiguous.
+
+If anything material remains unclear after your questions, ask a follow-up. Do not start
+implementation on assumptions the user has not confirmed.
+
+## 4. Then implement — in a separate turn
+
+Once the approach is **explicitly agreed** (user confirmed your recommendation, accepted their
+own proposal after your review, or said "just do it"), implement it in the **next** turn (Phase 3 of
+`.cursor/rules/tdd-workflow.mdc`). Do not implement in the same turn as diagnosis or proposal
+unless the user explicitly asks. Record the trade-off or the rejected alternative according to
+`.cursor/skills/relay-engineering-journal/SKILL.md`.
+
+## Exceptions
+
+Skip the review when the user explicitly says to just do it, or when the change is trivial and
+reversible (typo, rename, comment, log line). Never skip it silently — if you proceed without
+review, it is because the user asked for that.

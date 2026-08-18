@@ -1,0 +1,41 @@
+---
+description: Require user approval before adding any new library or package dependency
+alwaysApply: true
+---
+
+# Approve New Dependencies
+
+Never add a new library or package dependency without **explicit user approval first**.
+
+This applies to runtime and dev dependencies: npm packages, new imports that require installing
+something not already in `package.json` / `package-lock.json`, and Docker base-image or system
+packages that introduce a new external component.
+
+## Before proposing a dependency
+
+1. Check whether the repo already has what you need (stdlib, existing deps, in-repo utilities).
+2. If a new library is genuinely needed, **stop and ask the user** before editing
+   `package.json`, lockfiles, or Dockerfiles.
+
+Present briefly:
+
+- **Why** the dependency is needed (concrete problem, not convenience).
+- **Which package** (name, and why this one over close alternatives).
+- **Alternatives without a new dep** — including doing it in-repo — and why they lose if they do.
+
+Do not install, import, or commit a new dependency until the user agrees.
+
+## After approval
+
+Record the decision in `docs/` per `.cursor/rules/document-every-change.mdc` when the choice is
+non-obvious or affects runtime behaviour.
+
+## Exceptions
+
+Proceed without a separate approval step only when:
+
+- The user **explicitly named the library** in the same message ("add `zod` for validation",
+  "use `ioredis`") — still mention trade-offs if relevant, but do not block on re-asking.
+- The user said **"just do it"** or equivalent after you already proposed the dependency.
+
+Never treat your own decision to add a library as implicit approval.
