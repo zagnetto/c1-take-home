@@ -44,6 +44,13 @@ test('sanitizeConversationTitle caps at 200 chars and strips markup', () => {
   assert.equal(sanitizeConversationTitle('a'.repeat(201)), null);
 });
 
+test('sanitizeConversationTitle does not strip unclosed tags (frontend must encode)', () => {
+  assert.equal(
+    sanitizeConversationTitle('Support <img src=x onerror=alert(1) ticket'),
+    'Support <img src=x onerror=alert(1) ticket',
+  );
+});
+
 test('parseClientId accepts optional uuid-like strings up to 64 chars', () => {
   assert.equal(parseClientId(undefined), null);
   assert.equal(parseClientId(null), null);

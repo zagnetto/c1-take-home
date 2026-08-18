@@ -16,7 +16,7 @@ export function parsePositiveInt(value: unknown): number | null {
   return null;
 }
 
-/** Strip HTML/script markup and control chars before persisting user text. */
+/** Strip HTML/script markup and control chars before persisting user text. Not an XSS defense for HTML sinks — use contextual encoding (e.g. textContent) at render time. */
 export function sanitizeStoredText(raw: unknown, maxLength: number): string | null {
   if (typeof raw !== 'string') return null;
 

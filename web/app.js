@@ -158,8 +158,15 @@ function renderSidebar() {
   for (const c of conversations) {
     const li = document.createElement('li');
     if (c.id === activeConversation) li.className = 'active';
-    li.innerHTML =
-      `<span>${c.title} (${c.messageCount})</span>` + (c.unread ? '<span class="dot">●</span>' : '');
+    const label = document.createElement('span');
+    label.textContent = `${c.title} (${c.messageCount})`;
+    li.appendChild(label);
+    if (c.unread) {
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      dot.textContent = '●';
+      li.appendChild(dot);
+    }
     li.onclick = () => openConversation(c.id, c.title);
     list.appendChild(li);
   }
