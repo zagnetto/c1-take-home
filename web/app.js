@@ -1,10 +1,31 @@
-const userId = 1;
+let userId;
+let userName;
 let ws;
 let activeConversation;
 let conversations = [];
 
+const fetchOpts = { credentials: 'same-origin' };
+
+async function initSession() {
+  const res = await fetch('/api/session', { method: 'POST', ...fetchOpts });
+  if (res.status === 503) {
+    document.getElementById('userBadge').textContent = 'All users busy';
+    document.getElementById('title').textContent = 'No free users — try again later';
+    return;
+  }
+  const body = await res.json();
+  userId = body.userId;
+  userName = body.name;
+  renderUser();
+  await loadConversations();
+}
+
+function renderUser() {
+  document.getElementById('userBadge').textContent = userName ?? `#${userId}`;
+}
+
 async function loadConversations() {
-  const res = await fetch(`/api/conversations?userId=${userId}`);
+  const res = await fetch('/api/conversations', fetchOpts);
   conversations = await res.json();
   renderSidebar();
   connectWs();
@@ -49,7 +70,7 @@ async function openConversation(id, title) {
   renderSidebar();
 
   document.getElementById('title').textContent = title;
-  const res = await fetch(`/api/messages?conversationId=${id}`);
+  const res = await fetch(`/api/messages?conversationId=${id}`, fetchOpts);
   const messages = await res.json();
   const pane = document.getElementById('messages');
   pane.innerHTML = '';
@@ -74,9 +95,9 @@ document.getElementById('composer').onsubmit = async (e) => {
   await fetch('/api/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    ...fetchOpts,
     body: JSON.stringify({
       conversationId: activeConversation,
-      senderId: userId,
       body,
       clientId: crypto.randomUUID(),
     }),
@@ -89,7 +110,8 @@ document.getElementById('newConv').onclick = async () => {
   await fetch('/api/conversations', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title, participantIds: [userId, 2] }),
+    ...fetchOpts,
+    body: JSON.stringify({ title, participantIds: [2] }),
   });
   await loadConversations();
 };
@@ -98,7 +120,7 @@ document.getElementById('searchForm').onsubmit = async (e) => {
   e.preventDefault();
   const q = document.getElementById('search').value.trim();
   if (!q) return;
-  const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+  const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`, fetchOpts);
   renderResults(q, await res.json());
 };
 
@@ -127,4 +149,4 @@ function renderResults(q, results) {
   }
 }
 
-loadConversations();
+initSession();

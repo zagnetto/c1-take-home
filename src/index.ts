@@ -7,11 +7,13 @@ import { waitForRedis } from './db/redis.ts';
 import { conversationsRouter } from './routes/conversations.js';
 import { messagesRouter } from './routes/messages.js';
 import { searchRouter } from './routes/search.js';
+import { sessionRouter } from './routes/session.ts';
 import { attachWs, initRedisFanout } from './ws/hub.ts';
 
 const app = express();
 app.use(express.json());
 app.use(express.static('web'));
+app.use('/api/session', sessionRouter);
 app.use('/api/conversations', conversationsRouter);
 app.use('/api/messages', messagesRouter);
 app.use('/api/search', searchRouter);

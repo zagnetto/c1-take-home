@@ -3,18 +3,20 @@ import { createMessage } from '../services/messages.ts';
 import { pool } from '../db/mysql.ts';
 import { mongo } from '../db/mongo.ts';
 import { broadcast } from '../ws/hub.ts';
+import { requireSession } from '../middleware/session.ts';
 
 export const messagesRouter = express.Router();
 
-messagesRouter.post('/', async (req, res) => {
-  const { conversationId, senderId, body, clientId } = req.body || {};
-  if (!conversationId || !senderId || !body) {
-    return res.status(400).json({ error: 'conversationId, senderId and body are required' });
+messagesRouter.post('/', requireSession, async (req, res) => {
+  const { conversationId, body, clientId } = req.body || {};
+  const senderId = req.sessionUser.userId;
+  if (!conversationId || !body) {
+    return res.status(400).json({ error: 'conversationId and body are required' });
   }
 
   const msg = await createMessage({
     conversationId: Number(conversationId),
-    senderId: Number(senderId),
+    senderId,
     body: String(body),
     clientId: clientId ?? null,
   });

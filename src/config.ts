@@ -3,4 +3,7 @@ export const config = {
   mysqlUrl: process.env.MYSQL_URL || 'mysql://root:root@mysql:3306/relay?charset=utf8mb4',
   mongoUrl: process.env.MONGO_URL || 'mongodb://mongo:27017/relay',
   redisUrl: process.env.REDIS_URL || 'redis://redis:6379',
+  sessionCookieName: 'relay_session',
+  /** Default 24h — frees seeded user slots after idle expiry. */
+  sessionTtlSeconds: Number(process.env.SESSION_TTL_SECONDS) || 86_400,
 };

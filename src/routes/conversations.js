@@ -1,11 +1,11 @@
 import express from 'express';
 import { pool } from '../db/mysql.ts';
+import { requireSession, sessionOrQueryUserId } from '../middleware/session.ts';
 
 export const conversationsRouter = express.Router();
 
-conversationsRouter.get('/', async (req, res) => {
-  const userId = Number(req.query.userId);
-  if (!userId) return res.status(400).json({ error: 'userId is required' });
+conversationsRouter.get('/', sessionOrQueryUserId, async (req, res) => {
+  const userId = req.sessionUser.userId;
 
   const [conversations] = await pool.query(
     `SELECT c.id, c.title
@@ -33,20 +33,23 @@ conversationsRouter.get('/', async (req, res) => {
   res.json(result);
 });
 
-conversationsRouter.post('/', async (req, res) => {
+conversationsRouter.post('/', requireSession, async (req, res) => {
   const { title, participantIds } = req.body || {};
   if (!title || !Array.isArray(participantIds) || participantIds.length === 0) {
     return res.status(400).json({ error: 'title and a non-empty participantIds[] are required' });
   }
 
+  const selfId = req.sessionUser.userId;
+  const ids = [...new Set([selfId, ...participantIds.map(Number)])];
+
   const [created] = await pool.execute('INSERT INTO conversations (title) VALUES (?)', [title]);
   const id = created.insertId;
-  for (const uid of participantIds) {
+  for (const uid of ids) {
     await pool.execute(
       'INSERT INTO conversation_participants (conversation_id, user_id) VALUES (?, ?)',
-      [id, Number(uid)],
+      [id, uid],
     );
   }
 
-  res.status(201).json({ id, title, participantIds: participantIds.map(Number) });
+  res.status(201).json({ id, title, participantIds: ids });
 });
