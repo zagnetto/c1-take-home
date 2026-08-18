@@ -1,16 +1,16 @@
-import '../testHelpers/hostEnv.ts';
+import '../../testHelpers/hostEnv.ts';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { test } from 'node:test';
 import Redis from 'ioredis';
 import WebSocket from 'ws';
-import { config } from '../config.ts';
-import { REALTIME_EVENTS_CHANNEL } from '../services/realtimeKeys.ts';
+import { config } from '../../config.ts';
+import { REALTIME_EVENTS_CHANNEL } from '../../services/realtimeKeys.ts';
 import {
   clearRedisSessionKeys,
   seedRedisSession,
-} from '../testHelpers/wsSession.ts';
-import { attachWs, initRedisFanout } from './hub.ts';
+} from '../../testHelpers/wsSession.ts';
+import { attachWs, initRedisFanout } from '../hub.ts';
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -74,7 +74,7 @@ test('WebSocket without session is rejected at upgrade', async (t) => {
 });
 
 test('WebSocket with session only receives subscribed conversations the user belongs to', async (t) => {
-  const hub = await import('./hub.ts');
+  const hub = await import('../hub.ts');
   if (!('initRedisFanout' in hub) || typeof hub.initRedisFanout !== 'function') {
     t.skip('initRedisFanout not implemented yet');
     return;

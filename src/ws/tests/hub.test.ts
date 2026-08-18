@@ -1,17 +1,17 @@
-import '../testHelpers/hostEnv.ts';
+import '../../testHelpers/hostEnv.ts';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { test } from 'node:test';
 import Redis from 'ioredis';
 import WebSocket from 'ws';
-import { config } from '../config.ts';
-import { REALTIME_EVENTS_CHANNEL } from '../services/realtimeKeys.ts';
+import { config } from '../../config.ts';
+import { REALTIME_EVENTS_CHANNEL } from '../../services/realtimeKeys.ts';
 import {
   clearRedisSessionKeys,
   seedRedisSession,
   wsConnectHeaders,
-} from '../testHelpers/wsSession.ts';
-import { attachWs, broadcast } from './hub.ts';
+} from '../../testHelpers/wsSession.ts';
+import { attachWs, broadcast } from '../hub.ts';
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -93,7 +93,7 @@ test('broadcast publishes to relay:events (R6 publish-only path)', async (t) => 
 });
 
 test('relay:events delivery reaches subscribed local sockets (R6 + R4 rooms)', async (t) => {
-  const hub = await import('./hub.ts');
+  const hub = await import('../hub.ts');
   if (!('initRedisFanout' in hub) || typeof hub.initRedisFanout !== 'function') {
     t.skip('initRedisFanout not implemented yet');
     return;
@@ -149,7 +149,7 @@ test('relay:events delivery reaches subscribed local sockets (R6 + R4 rooms)', a
 });
 
 test('broadcast via Redis fan-out delivers to local room members including sender path', async (t) => {
-  const hub = await import('./hub.ts');
+  const hub = await import('../hub.ts');
   if (!('initRedisFanout' in hub) || typeof hub.initRedisFanout !== 'function') {
     t.skip('initRedisFanout not implemented yet');
     return;

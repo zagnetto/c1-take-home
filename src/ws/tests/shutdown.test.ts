@@ -1,17 +1,17 @@
-import './testHelpers/hostEnv.ts';
+import '../../testHelpers/hostEnv.ts';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { test } from 'node:test';
 import Redis from 'ioredis';
 import WebSocket from 'ws';
-import { config } from './config.ts';
-import { createGracefulShutdown } from './shutdown.ts';
+import { config } from '../../config.ts';
+import { createGracefulShutdown } from '../../shutdown.ts';
 import {
   clearRedisSessionKeys,
   seedRedisSession,
   wsConnectHeaders,
-} from './testHelpers/wsSession.ts';
-import { attachWs, closeWsServer } from './ws/hub.ts';
+} from '../../testHelpers/wsSession.ts';
+import { attachWs, closeWsServer } from '../hub.ts';
 
 async function redisAvailable(): Promise<boolean> {
   const probe = new Redis(config.redisUrl, {
@@ -235,7 +235,7 @@ test('gracefulShutdown calls closeAllConnections when drain exceeds timeout', as
 });
 
 test('installGracefulShutdown registers SIGTERM and SIGINT once', async () => {
-  const { installGracefulShutdown } = await import('./shutdown.ts');
+  const { installGracefulShutdown } = await import('../../shutdown.ts');
 
   const listenersBefore = process.listenerCount('SIGTERM');
   installGracefulShutdown({

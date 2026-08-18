@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, afterEach, before, test } from 'node:test';
 import Redis from 'ioredis';
-import { config } from '../config.ts';
+import { config } from '../../config.ts';
 
 const BASE = process.env.RELAY_TEST_URL ?? 'http://localhost:3000';
 const SESSION_COOKIE = 'relay_session';

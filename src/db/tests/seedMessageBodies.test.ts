@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { seedMessageBodies } from '../docker/db/seedMessageBodies.ts';
+import { seedMessageBodies } from '../../../docker/db/seedMessageBodies.ts';
 
 function mockCollection(existingCount: number) {
   let insertCalled = false;

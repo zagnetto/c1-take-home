@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { after, afterEach, before, test } from 'node:test';
 import Redis from 'ioredis';
-import { config } from '../config.ts';
-import { MAX_MESSAGE_BODY_LENGTH } from '../validation/messageInput.ts';
+import { config } from '../../config.ts';
+import { MAX_MESSAGE_BODY_LENGTH } from '../../validation/messageInput.ts';
 
 const BASE = process.env.RELAY_TEST_URL ?? 'http://localhost:3000';
 const SESSION_COOKIE = 'relay_session';

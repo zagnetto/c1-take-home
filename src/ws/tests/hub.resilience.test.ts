@@ -1,16 +1,16 @@
-import '../testHelpers/hostEnv.ts';
+import '../../testHelpers/hostEnv.ts';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { test } from 'node:test';
 import Redis from 'ioredis';
 import WebSocket from 'ws';
-import { config } from '../config.ts';
-import { REALTIME_EVENTS_CHANNEL } from '../services/realtimeKeys.ts';
+import { config } from '../../config.ts';
+import { REALTIME_EVENTS_CHANNEL } from '../../services/realtimeKeys.ts';
 import {
   clearRedisSessionKeys,
   seedRedisSession,
   wsConnectHeaders,
-} from '../testHelpers/wsSession.ts';
+} from '../../testHelpers/wsSession.ts';
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -43,7 +43,7 @@ async function startHub(options: { heartbeatMs?: number } = {}): Promise<{
   process.env.WS_MAX_SUBSCRIPTIONS = '50';
   process.env.WS_MAX_PAYLOAD_BYTES = '4096';
 
-  const { attachWs } = await import('./hub.ts');
+  const { attachWs } = await import('../hub.ts');
   const server = http.createServer();
   attachWs(server);
   await new Promise<void>((resolve) => server.listen(0, resolve));
@@ -101,7 +101,7 @@ test('terminates clients that miss heartbeat pong (R1)', async (t) => {
 });
 
 test('closes connections that exceed outbound backpressure (R2)', async (t) => {
-  const { sendFrameForTest } = await import('./hub.ts');
+  const { sendFrameForTest } = await import('../hub.ts');
 
   let terminated = false;
   const mock = {
@@ -166,7 +166,7 @@ test('subscribe ignores conversations the user is not a member of (R2 + access b
   }
 
   const { port, close } = await startHub({ heartbeatMs: 30_000 });
-  const { initRedisFanout } = await import('./hub.ts');
+  const { initRedisFanout } = await import('../hub.ts');
   await initRedisFanout();
 
   const { ws, redis, keys } = await openAuthenticatedWs(port, 1);

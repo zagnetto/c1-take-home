@@ -7,7 +7,7 @@ import {
   sanitizeConversationTitle,
   sanitizeMessageBody,
   sanitizeStoredText,
-} from './messageInput.ts';
+} from '../messageInput.ts';
 
 test('parsePositiveInt accepts positive integers only', () => {
   assert.equal(parsePositiveInt(1), 1);

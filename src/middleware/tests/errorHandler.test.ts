@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { NextFunction, Request, Response } from 'express';
-import { asyncHandler, errorHandler } from './errorHandler.ts';
+import { asyncHandler, errorHandler } from '../errorHandler.ts';
 
 function mockResponse(): Response & { statusCode: number; body: unknown } {
   const res = {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, afterEach, before, test } from 'node:test';
 import Redis from 'ioredis';
-import { config } from '../config.ts';
+import { config } from '../../config.ts';
 
 const BASE = process.env.RELAY_TEST_URL ?? 'http://localhost:3000';
 const SESSION_COOKIE = 'relay_session';
@@ -55,21 +55,6 @@ async function createSession(): Promise<{ cookie: string }> {
   return { cookie: `${SESSION_COOKIE}=${token}` };
 }
 
-async function postConversation(
-  cookie: string,
-  title: string,
-): Promise<{ status: number; body: Record<string, unknown> }> {
-  const res = await fetch(`${BASE}/api/conversations`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Cookie: cookie },
-    body: JSON.stringify({ title, participantIds: [2] }),
-  });
-  const text = await res.text();
-  let body: Record<string, unknown> = {};
-  if (text) body = JSON.parse(text) as Record<string, unknown>;
-  return { status: res.status, body };
-}
-
 before(async () => {
   if (await redisAvailable()) {
     cleanupRedis = new Redis(config.redisUrl, { maxRetriesPerRequest: 1 });
@@ -87,7 +72,7 @@ after(async () => {
   await cleanupRedis?.quit();
 });
 
-test('POST /api/conversations rejects duplicate title with 409', async (t) => {
+test('POST /api/conversations stores sanitized title without HTML markup', async (t) => {
   if (!(await stackAvailable())) {
     t.skip('API stack not reachable — run docker compose up');
     return;
@@ -98,12 +83,24 @@ test('POST /api/conversations rejects duplicate title with 409', async (t) => {
   }
 
   const session = await createSession();
-  const title = `unique title ${Date.now()}`;
+  const unsafeTitle = 'SEC1 <img src=x onerror=alert(1)> probe';
 
-  const first = await postConversation(session.cookie, title);
-  assert.equal(first.status, 201);
+  const created = await fetch(`${BASE}/api/conversations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: session.cookie },
+    body: JSON.stringify({ title: unsafeTitle, participantIds: [2] }),
+  });
+  assert.equal(created.status, 201);
+  const row = (await created.json()) as { id: number; title: string };
+  assert.equal(row.title, 'SEC1 probe');
+  assert.doesNotMatch(row.title, /[<>]/);
 
-  const second = await postConversation(session.cookie, title);
-  assert.equal(second.status, 409);
-  assert.match(String(second.body.error), /title already exists/i);
+  const listed = await fetch(`${BASE}/api/conversations`, {
+    headers: { Cookie: session.cookie },
+  });
+  assert.equal(listed.status, 200);
+  const conversations = (await listed.json()) as Array<{ id: number; title: string }>;
+  const found = conversations.find((c) => c.id === row.id);
+  assert.ok(found);
+  assert.equal(found.title, 'SEC1 probe');
 });

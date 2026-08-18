@@ -1,4 +1,4 @@
-import '../testHelpers/hostEnv.ts';
+import '../../testHelpers/hostEnv.ts';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { after, afterEach, before, test } from 'node:test';
@@ -9,7 +9,7 @@ import {
   initHttpTestCleanup,
   redisAvailable,
   stackAvailable,
-} from '../testHelpers/httpSession.ts';
+} from '../../testHelpers/httpSession.ts';
 
 process.env.MYSQL_URL ??=
   'mysql://root:root@127.0.0.1:3306/relay?charset=utf8mb4';
@@ -18,8 +18,8 @@ const BASE = process.env.RELAY_TEST_URL ?? 'http://localhost:3000';
 const FOREIGN_MESSAGE_COUNT = 3000;
 const ALICE_USER_ID = 1;
 
-const { pool, waitForMysql } = await import('../db/mysql.ts');
-const { LIST_CONVERSATIONS_SQL } = await import('./conversations.ts');
+const { pool, waitForMysql } = await import('../../db/mysql.ts');
+const { LIST_CONVERSATIONS_SQL } = await import('../conversations.ts');
 
 type ExplainRow = {
   table: string | null;

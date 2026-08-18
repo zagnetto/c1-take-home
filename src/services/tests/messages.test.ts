@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { test } from 'node:test';
-import { computeMessageSignature } from './messages.ts';
+import { computeMessageSignature } from '../messages.ts';
 
 // Regression guard only: async pbkdf2 must produce the same hex as the old pbkdf2Sync
 // (same salt, iterations, keylen, digest). Catches accidental param drift in

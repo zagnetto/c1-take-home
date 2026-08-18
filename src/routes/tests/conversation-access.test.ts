@@ -1,4 +1,4 @@
-import '../testHelpers/hostEnv.ts';
+import '../../testHelpers/hostEnv.ts';
 import assert from 'node:assert/strict';
 import { after, afterEach, before, test } from 'node:test';
 import {
@@ -9,7 +9,7 @@ import {
   redisAvailable,
   stackAvailable,
   wait,
-} from '../testHelpers/httpSession.ts';
+} from '../../testHelpers/httpSession.ts';
 
 const BASE = process.env.RELAY_TEST_URL ?? 'http://localhost:3000';
 
