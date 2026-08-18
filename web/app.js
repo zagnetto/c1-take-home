@@ -13,7 +13,13 @@ let hasMoreMessages = false;
 
 let sendInFlight = false;
 
+let searchQuery = null;
+let searchCursor = null;
+let searchHasMore = false;
+let searchLoading = false;
+
 const MESSAGE_PAGE_LIMIT = 50;
+const SEARCH_PAGE_LIMIT = 50;
 
 function setComposerEnabled(enabled) {
   // Keep #text enabled during send so Enter-submit does not steal focus (sendInFlight blocks dupes).
@@ -191,6 +197,9 @@ function renderEarlierHint() {
 
 async function openConversation(id, title) {
   activeConversation = id;
+  searchQuery = null;
+  searchCursor = null;
+  searchHasMore = false;
   oldestLoadedId = null;
   hasMoreMessages = false;
   const c = conversations.find((x) => x.id === id);
@@ -305,33 +314,95 @@ document.getElementById('searchForm').onsubmit = async (e) => {
   e.preventDefault();
   const q = document.getElementById('search').value.trim();
   if (!q) return;
-  const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`, fetchOpts);
-  renderResults(q, await res.json());
+  searchQuery = q;
+  searchCursor = null;
+  searchHasMore = false;
+  const page = await fetchSearchPage(q);
+  renderResults(q, page, { replace: true });
 };
 
-function renderResults(q, results) {
+async function fetchSearchPage(q, { cursor, limit } = {}) {
+  const params = new URLSearchParams({ q });
+  params.set('limit', String(limit ?? SEARCH_PAGE_LIMIT));
+  if (cursor) params.set('cursor', cursor);
+  const res = await fetch(`/api/search?${params}`, fetchOpts);
+  return res.json();
+}
+
+function createSearchResultElement(r) {
+  const div = document.createElement('div');
+  div.className = 'msg search-result';
+  div.style.cursor = 'pointer';
+  const title = document.createElement('strong');
+  title.textContent = r.conversationTitle ?? '#' + r.conversationId;
+  div.append(title, ' — ' + (r.body ?? ''));
+  div.onclick = () => openConversation(r.conversationId, r.conversationTitle ?? '#' + r.conversationId);
+  return div;
+}
+
+function appendSearchResults(results) {
+  const pane = document.getElementById('messages');
+  const btn = pane.querySelector('.search-load-more');
+  const fragment = document.createDocumentFragment();
+  for (const r of results) fragment.appendChild(createSearchResultElement(r));
+  if (btn) pane.insertBefore(fragment, btn);
+  else pane.appendChild(fragment);
+}
+
+function renderSearchLoadMore() {
+  const pane = document.getElementById('messages');
+  pane.querySelector('.search-load-more')?.remove();
+
+  if (!searchHasMore || !searchQuery || !searchCursor) return;
+
+  const btn = document.createElement('button');
+  btn.className = 'search-load-more';
+  btn.type = 'button';
+  btn.textContent = 'Load more';
+  btn.onclick = () => void loadMoreSearchResults();
+  pane.appendChild(btn);
+}
+
+async function loadMoreSearchResults() {
+  if (searchLoading || !searchHasMore || !searchQuery || !searchCursor) return;
+  searchLoading = true;
+  const btn = document.querySelector('.search-load-more');
+  if (btn) btn.disabled = true;
+  try {
+    const page = await fetchSearchPage(searchQuery, { cursor: searchCursor });
+    renderResults(searchQuery, page, { replace: false });
+  } finally {
+    searchLoading = false;
+  }
+}
+
+function renderResults(q, page, { replace = true } = {}) {
   activeConversation = null;
+  searchQuery = q;
+  searchCursor = page.nextCursor ?? null;
+  searchHasMore = page.hasMore === true;
+
   document.getElementById('title').textContent = `Search: "${q}"`;
   const pane = document.getElementById('messages');
-  pane.innerHTML = '';
-  if (!results.length) {
+  if (replace) pane.innerHTML = '';
+
+  const results = page.results ?? [];
+  if (replace && !results.length) {
     const empty = document.createElement('div');
     empty.className = 'msg';
     empty.style.color = '#888';
     empty.textContent = 'No results.';
     pane.appendChild(empty);
+    renderSearchLoadMore();
     return;
   }
-  for (const r of results) {
-    const div = document.createElement('div');
-    div.className = 'msg';
-    div.style.cursor = 'pointer';
-    const title = document.createElement('strong');
-    title.textContent = r.conversationTitle ?? '#' + r.conversationId;
-    div.append(title, ' — ' + (r.body ?? ''));
-    div.onclick = () => openConversation(r.conversationId, r.conversationTitle ?? '#' + r.conversationId);
-    pane.appendChild(div);
+
+  if (replace) {
+    for (const r of results) pane.appendChild(createSearchResultElement(r));
+  } else {
+    appendSearchResults(results);
   }
+  renderSearchLoadMore();
 }
 
 initSession();

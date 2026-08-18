@@ -31,6 +31,18 @@ export async function assertConversationAccess(
   }
 }
 
+export async function listUserConversationIds(userId: number): Promise<number[]> {
+  const [rows] = await pool.query(
+    `SELECT p.conversation_id AS conversationId
+     FROM conversation_participants p
+     JOIN conversations c ON c.id = p.conversation_id
+     WHERE p.user_id = ?
+     ORDER BY p.conversation_id ASC`,
+    [userId],
+  );
+  return (rows as { conversationId: number }[]).map((r) => r.conversationId);
+}
+
 export async function filterMemberConversationIds(
   userId: number,
   conversationIds: number[],
