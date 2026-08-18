@@ -2,9 +2,9 @@ import '../testHelpers/hostEnv.ts';
 import crypto from 'node:crypto';
 import Redis from 'ioredis';
 import { config } from '../config.ts';
-import { sessionTokenKey, sessionUserSlotKey } from '../services/sessionKeys.ts';
+import { sessionTokenKey, sessionUserSlotKey } from '../constants/redis.ts';
 
-const SESSION_COOKIE = 'relay_session';
+const SESSION_COOKIE = config.sessionCookieName;
 
 export function wsSessionCookie(token: string): string {
   return `${SESSION_COOKIE}=${token}`;

@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import Redis from 'ioredis';
 import WebSocket from 'ws';
 import { config } from '../../config.ts';
-import { REALTIME_EVENTS_CHANNEL } from '../../services/realtimeKeys.ts';
+import { REALTIME_EVENTS_CHANNEL } from '../../constants/redis.ts';
 import {
   clearRedisSessionKeys,
   seedRedisSession,

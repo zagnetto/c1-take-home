@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildMessagesPage, parseLimit } from '../messagesPagination.ts';
+import { buildMessagesPage, parseLimit } from '../pagination.ts';
 
 test('parseLimit defaults to 50 when omitted', () => {
   assert.equal(parseLimit(undefined), 50);

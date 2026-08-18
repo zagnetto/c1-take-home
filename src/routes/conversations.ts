@@ -2,22 +2,11 @@ import express from 'express';
 import { pool } from '../db/mysql.ts';
 import { requireSession } from '../middleware/session.ts';
 import { asyncHandler } from '../middleware/errorHandler.ts';
-import {
-  MAX_CONVERSATION_TITLE_LENGTH,
-  parsePositiveInt,
-  sanitizeConversationTitle,
-} from '../validation/messageInput.ts';
+import { MAX_CONVERSATION_TITLE_LENGTH } from '../constants/conversations.ts';
+import { isDuplicateTitleError } from '../helpers/mysqlErrors.ts';
+import { parsePositiveInt, sanitizeConversationTitle } from '../validation/messageInput.ts';
 
 export const conversationsRouter = express.Router();
-
-function isDuplicateTitleError(err: unknown): boolean {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    'code' in err &&
-    (err as { code: string }).code === 'ER_DUP_ENTRY'
-  );
-}
 
 async function findConversationIdByTitle(title: string): Promise<number | null> {
   const [rows] = await pool.query<Array<{ id: number }>>(

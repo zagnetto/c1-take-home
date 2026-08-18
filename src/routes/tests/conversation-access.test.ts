@@ -9,9 +9,8 @@ import {
   redisAvailable,
   stackAvailable,
   wait,
+  TEST_BASE_URL,
 } from '../../testHelpers/httpSession.ts';
-
-const BASE = process.env.RELAY_TEST_URL ?? 'http://localhost:3000';
 
 before(async () => {
   await initHttpTestCleanup();
@@ -31,7 +30,7 @@ test('GET /api/messages without session returns 401', async (t) => {
     return;
   }
 
-  const res = await fetch(`${BASE}/api/messages?conversationId=1&limit=10`);
+  const res = await fetch(`${TEST_BASE_URL}/api/messages?conversationId=1&limit=10`);
   assert.equal(res.status, 401);
 });
 
@@ -41,7 +40,7 @@ test('GET /api/conversations rejects legacy ?userId= without session', async (t)
     return;
   }
 
-  const res = await fetch(`${BASE}/api/conversations?userId=1`);
+  const res = await fetch(`${TEST_BASE_URL}/api/conversations?userId=1`);
   assert.equal(res.status, 401);
 });
 
@@ -61,12 +60,12 @@ test('GET /api/messages returns 404 for conversation the user is not a member of
     return;
   }
 
-  const forbidden = await fetch(`${BASE}/api/messages?conversationId=2&limit=10`, {
+  const forbidden = await fetch(`${TEST_BASE_URL}/api/messages?conversationId=2&limit=10`, {
     headers: { Cookie: bob.cookie },
   });
   assert.equal(forbidden.status, 404);
 
-  const allowed = await fetch(`${BASE}/api/messages?conversationId=1&limit=10`, {
+  const allowed = await fetch(`${TEST_BASE_URL}/api/messages?conversationId=1&limit=10`, {
     headers: { Cookie: bob.cookie },
   });
   assert.equal(allowed.status, 200);
@@ -88,10 +87,10 @@ test('GET /api/messages returns the same 404 for missing and forbidden conversat
     return;
   }
 
-  const forbidden = await fetch(`${BASE}/api/messages?conversationId=2&limit=10`, {
+  const forbidden = await fetch(`${TEST_BASE_URL}/api/messages?conversationId=2&limit=10`, {
     headers: { Cookie: bob.cookie },
   });
-  const missing = await fetch(`${BASE}/api/messages?conversationId=99999&limit=10`, {
+  const missing = await fetch(`${TEST_BASE_URL}/api/messages?conversationId=99999&limit=10`, {
     headers: { Cookie: bob.cookie },
   });
 
@@ -118,7 +117,7 @@ test('POST /api/messages returns 404 when sender is not a conversation participa
     return;
   }
 
-  const res = await fetch(`${BASE}/api/messages`, {
+  const res = await fetch(`${TEST_BASE_URL}/api/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Cookie: bob.cookie },
     body: JSON.stringify({
@@ -148,7 +147,7 @@ test('POST /api/messages still succeeds for a participant', async (t) => {
     return;
   }
 
-  const res = await fetch(`${BASE}/api/messages`, {
+  const res = await fetch(`${TEST_BASE_URL}/api/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Cookie: bob.cookie },
     body: JSON.stringify({

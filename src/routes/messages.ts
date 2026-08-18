@@ -6,9 +6,9 @@ import { broadcast } from '../ws/hub.ts';
 import { requireConversationAccess } from '../middleware/conversationAccess.ts';
 import { requireSession } from '../middleware/session.ts';
 import { asyncHandler } from '../middleware/errorHandler.ts';
-import { parseLimit, buildMessagesPage } from './messagesPagination.ts';
+import { MAX_MESSAGE_BODY_LENGTH } from '../constants/messages.ts';
+import { buildMessagesPage, parseLimit } from '../helpers/pagination.ts';
 import {
-  MAX_MESSAGE_BODY_LENGTH,
   parseClientId,
   parsePositiveInt,
   sanitizeMessageBody,

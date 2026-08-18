@@ -1,5 +1,4 @@
-export const DEFAULT_MESSAGE_LIMIT = 50;
-export const MAX_MESSAGE_LIMIT = 200;
+import { DEFAULT_MESSAGE_LIMIT, MAX_MESSAGE_LIMIT } from '../constants/messages.ts';
 
 export function parseLimit(raw: unknown): number | null {
   if (raw == null || raw === '') return DEFAULT_MESSAGE_LIMIT;

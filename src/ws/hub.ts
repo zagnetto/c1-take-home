@@ -5,7 +5,7 @@ import { parseCookies } from '../middleware/session.ts';
 import { filterMemberConversationIds } from '../services/conversationAccess.ts';
 import { lookupSession, type SessionUser } from '../services/session.ts';
 import { redis, redisSubscriber } from '../db/redis.ts';
-import { REALTIME_EVENTS_CHANNEL } from '../services/realtimeKeys.ts';
+import { REALTIME_EVENTS_CHANNEL } from '../constants/redis.ts';
 
 type Client = WebSocket & { subs?: Set<number>; isAlive?: boolean; userId: number };
 

@@ -92,6 +92,161 @@ export async function list(req: Request, res: Response) {
 | `routes/conversations.ts` `isDuplicateTitleError` | `helpers/mysqlErrors.ts` |
 | duplicated `BASE` / `SESSION_COOKIE` in route tests | `testHelpers/httpSession.ts` only |
 
+#### Phase 2 status
+
+- **Phase 1 (tests):** done — all `*.test.ts` live under `src/**/tests/`; glob in `package.json` matches.
+- **Phase 2 (constants/helpers):** done — see `docs/022-project-structure-refactor-phase2.md`.
+
+#### New files (Phase 2)
+
+**`src/constants/messages.ts`**
+
+```ts
+export const MAX_MESSAGE_BODY_LENGTH = 10_000;
+export const DEFAULT_MESSAGE_LIMIT = 50;
+export const MAX_MESSAGE_LIMIT = 200;
+```
+
+**`src/constants/conversations.ts`**
+
+```ts
+export const MAX_CONVERSATION_TITLE_LENGTH = 200;
+```
+
+**`src/constants/redis.ts`** — merge `realtimeKeys.ts` + `sessionKeys.ts`:
+
+```ts
+export const REALTIME_EVENTS_CHANNEL = 'relay:events';
+
+export function sessionTokenKey(token: string): string {
+  return `relay:session:${token}`;
+}
+
+export function sessionUserSlotKey(userId: number): string {
+  return `relay:session:user:${userId}`;
+}
+```
+
+Key-builder functions live here (not `helpers/`) because they are namespace contracts, not
+transform logic — same as the original spec table.
+
+**`src/constants/errors.ts`**
+
+```ts
+export const INFRA_ERROR_CODES = new Set([/* ECONNREFUSED, … */]);
+export const INFRA_ERROR_NAMES = new Set([/* MongoNetworkError, … */]);
+```
+
+**`src/helpers/pagination.ts`** — pure functions + list response types from `messagesPagination.ts`:
+
+```ts
+import { DEFAULT_MESSAGE_LIMIT, MAX_MESSAGE_LIMIT } from '../constants/messages.ts';
+
+export type MessageListItem = { … };
+export type MessagesPageResponse = { … };
+
+export function parseLimit(raw: unknown): number | null { … }
+export function buildMessagesPage<T extends { id: number }>(…): { … } { … }
+```
+
+**`src/helpers/mysqlErrors.ts`**
+
+```ts
+export function isDuplicateTitleError(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'code' in err
+    && (err as { code: string }).code === 'ER_DUP_ENTRY';
+}
+```
+
+#### Files to delete after import rewiring
+
+| File | Reason |
+|---|---|
+| `src/services/realtimeKeys.ts` | → `constants/redis.ts` |
+| `src/services/sessionKeys.ts` | → `constants/redis.ts` |
+| `src/routes/messagesPagination.ts` | split into constants + helpers |
+
+#### Import rewiring (production)
+
+| Consumer | Before | After |
+|---|---|---|
+| `validation/messageInput.ts` | local `MAX_*` constants | `constants/messages.ts`, `constants/conversations.ts` |
+| `routes/messages.ts` | `messagesPagination`, `MAX_MESSAGE_BODY_LENGTH` from validation | `helpers/pagination.ts`, `constants/messages.ts`; keep parsers from validation until Phase 3 |
+| `routes/conversations.ts` | `isDuplicateTitleError` inline, limits from validation | `helpers/mysqlErrors.ts`, `constants/conversations.ts` |
+| `middleware/errorHandler.ts` | local `INFRA_ERROR_*` sets | `constants/errors.ts` (sets only; see open question on `isInfrastructureError`) |
+| `services/session.ts`, `db/redis.ts`, `ws/hub.ts` | `services/*Keys.ts` | `constants/redis.ts` |
+| `testHelpers/httpSession.ts`, `testHelpers/wsSession.ts` | `services/sessionKeys.ts` | `constants/redis.ts` |
+
+#### Test file moves (Phase 2)
+
+| Current | Target |
+|---|---|
+| `src/routes/tests/messagesPagination.test.ts` | `src/helpers/tests/pagination.test.ts` |
+
+Update import to `../pagination.ts`. No new test cases — existing five tests stay as regression
+guard for the move.
+
+Optional (recommended): `src/helpers/tests/mysqlErrors.test.ts` with one case for `ER_DUP_ENTRY`
+and one negative — cheap coverage for extracted helper; skip if user prefers zero new tests.
+
+#### Test helper consolidation
+
+**Problem:** five route integration tests duplicate `BASE`, `SESSION_COOKIE`, `stackAvailable`,
+`redisAvailable`, `parseSessionCookie`, and local `createSession` (~40 lines each). Three others
+already import partial helpers from `testHelpers/httpSession.ts`.
+
+**Fix:** export from `testHelpers/httpSession.ts`:
+
+```ts
+export const TEST_BASE_URL = process.env.RELAY_TEST_URL ?? 'http://localhost:3000';
+export const SESSION_COOKIE = config.sessionCookieName; // was hardcoded 'relay_session'
+```
+
+Refactor these files to import shared helpers instead of local copies:
+
+- `routes/tests/session.test.ts`
+- `routes/tests/conversations-validation.test.ts`
+- `routes/tests/conversations-duplicate-title.test.ts`
+- `routes/tests/messages-idempotent.test.ts`
+- `routes/tests/messages-validation.test.ts`
+- `routes/tests/message-read.test.ts` (replace local `BASE` only)
+- `routes/tests/conversation-access.test.ts` (replace local `BASE` only)
+
+`wsSession.ts`: replace local `SESSION_COOKIE` with `config.sessionCookieName` (or import from
+`httpSession.ts` if we export it).
+
+`session.test.ts` keeps its own Redis cleanup hooks — it tests the session endpoint lifecycle and
+cannot fully delegate to `createSession()` from httpSession without changing assertion style. It
+still drops duplicated `BASE` / cookie name / availability probes.
+
+#### Execution order (single PR, verify `npm test` after each step)
+
+1. Add `constants/*` — no consumers yet; trivial compile check.
+2. Add `helpers/pagination.ts`, `helpers/mysqlErrors.ts`.
+3. Rewire production imports; delete obsolete source files.
+4. Update `validation/messageInput.ts` to import limits from constants (validation path unchanged
+   until Phase 3).
+5. Move `messagesPagination.test.ts` → `helpers/tests/pagination.test.ts`.
+6. Export test constants from `httpSession.ts`; dedupe route tests.
+7. Full `npm test`.
+
+#### What stays untouched in Phase 2
+
+- `src/validation/` path and parsers (`parsePositiveInt`, `sanitize*`, …) — Phase 3.
+- Route handlers, SQL, pool/mongo calls — Phase 4–5.
+- `isInfrastructureError` / `isMalformedJsonBody` — stay in `middleware/errorHandler.ts` unless
+  user chooses to extract (open question below).
+- `MessageListItem` / `MessagesPageResponse` types — stay in `helpers/pagination.ts` until Phase 4+
+  (`src/types/` only if duplication appears).
+
+#### Open questions — resolved
+
+| Question | Decision |
+|---|---|
+| `isInfrastructureError` location | **Set-и → `constants/errors.ts`; функція лишається в `middleware/errorHandler.ts`** |
+| `helpers/tests/mysqlErrors.test.ts` | **Так** — два кейси (`ER_DUP_ENTRY` + negative) |
+| Test base URL export name | **`TEST_BASE_URL`** з `testHelpers/httpSession.ts` |
+
 ### Phase 3 — validation → helpers/validation
 
 | Current | Target |
@@ -188,8 +343,16 @@ One domain per change set when possible; run full test suite after each phase.
 - Consolidate duplicated test constants into `testHelpers/` — **adopted**
 - Update `relay-architecture` skill after code lands — **adopted**
 
-**Agreed in Phase 2**
+**Agreed in Phase 2 (planning)**
 - Target layout and layer rules above.
 - Test glob: `src/**/tests/**/*.test.ts`.
 - `helpers/validation/` replaces `src/validation/`.
 - Refactor is documentation-first; code phases follow user approval per domain.
+
+**Agreed for migration Phase 2** (confirmed)
+- Single PR for all Phase 2 extractions; `npm test` green at end.
+- Redis key builders stay as functions in `constants/redis.ts` (not `helpers/`).
+- `TEST_BASE_URL` export from `httpSession.ts`; `SESSION_COOKIE` reads `config.sessionCookieName`.
+- `isInfrastructureError` stays in `middleware/errorHandler.ts`; only the `Set`s move to `constants/errors.ts`.
+- Add `helpers/tests/mysqlErrors.test.ts` (two cases).
+- No new npm dependencies.

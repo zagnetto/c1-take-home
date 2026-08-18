@@ -1,6 +1,6 @@
 import Redis from 'ioredis';
 import { config } from '../config.ts';
-import { REALTIME_EVENTS_CHANNEL } from '../services/realtimeKeys.ts';
+import { REALTIME_EVENTS_CHANNEL } from '../constants/redis.ts';
 
 function attachRedisErrorLogging(client: Redis, label: string): void {
   client.on('error', (err) => {

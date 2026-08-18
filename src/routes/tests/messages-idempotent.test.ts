@@ -1,89 +1,40 @@
+import '../../testHelpers/hostEnv.ts';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { after, afterEach, before, test } from 'node:test';
-import Redis from 'ioredis';
-import { config } from '../../config.ts';
+import {
+  cleanupHttpTestSessions,
+  closeHttpTestCleanup,
+  createSession,
+  initHttpTestCleanup,
+  redisAvailable,
+  stackAvailable,
+  TEST_BASE_URL,
+} from '../../testHelpers/httpSession.ts';
 
-const BASE = process.env.RELAY_TEST_URL ?? 'http://localhost:3000';
-const SESSION_COOKIE = 'relay_session';
+before(async () => {
+  await initHttpTestCleanup();
+});
 
-async function stackAvailable(): Promise<boolean> {
-  try {
-    const res = await fetch(`${BASE}/`, { signal: AbortSignal.timeout(2000) });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
+afterEach(async () => {
+  await cleanupHttpTestSessions();
+});
 
-async function redisAvailable(): Promise<boolean> {
-  const probe = new Redis(config.redisUrl, {
-    maxRetriesPerRequest: 1,
-    connectTimeout: 1000,
-    lazyConnect: true,
-  });
-  try {
-    await probe.connect();
-    await probe.ping();
-    await probe.quit();
-    return true;
-  } catch {
-    await probe.quit().catch(() => undefined);
-    return false;
-  }
-}
-
-function parseSessionCookie(setCookie: string | null): string | undefined {
-  if (!setCookie) return undefined;
-  const match = setCookie.match(new RegExp(`${SESSION_COOKIE}=([^;]+)`));
-  return match?.[1];
-}
-
-const createdSessionKeys: string[] = [];
-let cleanupRedis: Redis | undefined;
-
-function trackSession(token: string, userId: number): void {
-  createdSessionKeys.push(`relay:session:${token}`, `relay:session:user:${userId}`);
-}
-
-async function createSession(): Promise<{ cookie: string }> {
-  const res = await fetch(`${BASE}/api/session`, { method: 'POST' });
-  assert.equal(res.status, 201);
-  const body = (await res.json()) as { userId: number };
-  const token = parseSessionCookie(res.headers.get('set-cookie'));
-  assert.ok(token);
-  trackSession(token, body.userId);
-  return { cookie: `${SESSION_COOKIE}=${token}` };
-}
+after(async () => {
+  await closeHttpTestCleanup();
+});
 
 async function postMessage(
   cookie: string,
   payload: { conversationId: number; body: string; clientId: string },
 ): Promise<{ status: number; body: Record<string, unknown> }> {
-  const res = await fetch(`${BASE}/api/messages`, {
+  const res = await fetch(`${TEST_BASE_URL}/api/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Cookie: cookie },
     body: JSON.stringify(payload),
   });
   return { status: res.status, body: (await res.json()) as Record<string, unknown> };
 }
-
-before(async () => {
-  if (await redisAvailable()) {
-    cleanupRedis = new Redis(config.redisUrl, { maxRetriesPerRequest: 1 });
-  }
-});
-
-afterEach(async () => {
-  if (cleanupRedis && createdSessionKeys.length) {
-    await cleanupRedis.del(...createdSessionKeys);
-    createdSessionKeys.length = 0;
-  }
-});
-
-after(async () => {
-  await cleanupRedis?.quit();
-});
 
 test('POST /api/messages returns existing message on duplicate clientId', async (t) => {
   if (!(await stackAvailable())) {

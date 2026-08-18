@@ -9,12 +9,12 @@ import {
   initHttpTestCleanup,
   redisAvailable,
   stackAvailable,
+  TEST_BASE_URL,
 } from '../../testHelpers/httpSession.ts';
 
 process.env.MYSQL_URL ??=
   'mysql://root:root@127.0.0.1:3306/relay?charset=utf8mb4';
 
-const BASE = process.env.RELAY_TEST_URL ?? 'http://localhost:3000';
 const FOREIGN_MESSAGE_COUNT = 3000;
 const ALICE_USER_ID = 1;
 
@@ -126,7 +126,7 @@ test('GET /api/conversations aggregates only the current user conversations', as
       `EXPLAIN must not scale with all messages (estimated ${messagesPlanRows}, total ${totalMessages})`,
     );
 
-    const res = await fetch(`${BASE}/api/conversations`, {
+    const res = await fetch(`${TEST_BASE_URL}/api/conversations`, {
       headers: { Cookie: alice.cookie },
     });
     assert.equal(res.status, 200);

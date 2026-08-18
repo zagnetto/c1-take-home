@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import Redis from 'ioredis';
 import { config } from '../config.ts';
-import { sessionTokenKey, sessionUserSlotKey } from '../services/sessionKeys.ts';
+import { sessionTokenKey, sessionUserSlotKey } from '../constants/redis.ts';
 
-const BASE = process.env.RELAY_TEST_URL ?? 'http://localhost:3000';
-const SESSION_COOKIE = 'relay_session';
+export const TEST_BASE_URL = process.env.RELAY_TEST_URL ?? 'http://localhost:3000';
+export const SESSION_COOKIE = config.sessionCookieName;
 
 export function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -14,7 +14,7 @@ export function wait(ms: number): Promise<void> {
 
 export async function stackAvailable(): Promise<boolean> {
   try {
-    const res = await fetch(`${BASE}/`, { signal: AbortSignal.timeout(2000) });
+    const res = await fetch(`${TEST_BASE_URL}/`, { signal: AbortSignal.timeout(2000) });
     return res.ok;
   } catch {
     return false;
@@ -54,7 +54,7 @@ export function trackSession(token: string, userId: number): void {
 export async function tryCreateSession(): Promise<
   { userId: number; cookie: string; token: string } | null
 > {
-  const res = await fetch(`${BASE}/api/session`, { method: 'POST' });
+  const res = await fetch(`${TEST_BASE_URL}/api/session`, { method: 'POST' });
   if (res.status === 503) return null;
   assert.equal(res.status, 201, `expected 201 from POST /api/session, got ${res.status}`);
   const body = (await res.json()) as { userId: number };

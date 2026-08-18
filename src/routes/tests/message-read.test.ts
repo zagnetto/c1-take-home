@@ -8,9 +8,8 @@ import {
   initHttpTestCleanup,
   redisAvailable,
   stackAvailable,
+  TEST_BASE_URL,
 } from '../../testHelpers/httpSession.ts';
-
-const BASE = process.env.RELAY_TEST_URL ?? 'http://localhost:3000';
 
 type MessagesPage = {
   messages: Array<{ id: number; body?: string }>;
@@ -46,7 +45,7 @@ test('GET /api/conversations returns messageCount and lastMessage in one respons
     return;
   }
 
-  const res = await fetch(`${BASE}/api/conversations`, {
+  const res = await fetch(`${TEST_BASE_URL}/api/conversations`, {
     headers: { Cookie: alice.cookie },
   });
   assert.equal(res.status, 200);
@@ -83,14 +82,14 @@ test('GET /api/messages returns paginated page object in ascending order', async
 
   const auth = { headers: { Cookie: alice.cookie } };
 
-  const allRes = await fetch(`${BASE}/api/messages?conversationId=1&limit=200`, auth);
+  const allRes = await fetch(`${TEST_BASE_URL}/api/messages?conversationId=1&limit=200`, auth);
   assert.equal(allRes.status, 200);
   const all = (await allRes.json()) as MessagesPage;
   assert.ok(Array.isArray(all.messages));
   assert.equal(typeof all.hasMore, 'boolean');
   assert.ok(all.messages.length >= 2);
 
-  const pageRes = await fetch(`${BASE}/api/messages?conversationId=1&limit=1`, auth);
+  const pageRes = await fetch(`${TEST_BASE_URL}/api/messages?conversationId=1&limit=1`, auth);
   assert.equal(pageRes.status, 200);
   const page = (await pageRes.json()) as MessagesPage;
   assert.equal(page.messages.length, 1);
@@ -103,7 +102,7 @@ test('GET /api/messages returns paginated page object in ascending order', async
   assert.equal(page.nextBefore, page.messages[0]!.id);
 
   const olderRes = await fetch(
-    `${BASE}/api/messages?conversationId=1&before=${page.messages[0]!.id}&limit=10`,
+    `${TEST_BASE_URL}/api/messages?conversationId=1&before=${page.messages[0]!.id}&limit=10`,
     auth,
   );
   assert.equal(olderRes.status, 200);
@@ -135,10 +134,10 @@ test('GET /api/messages rejects invalid pagination params', async (t) => {
 
   const auth = { headers: { Cookie: alice.cookie } };
 
-  const badLimit = await fetch(`${BASE}/api/messages?conversationId=1&limit=0`, auth);
+  const badLimit = await fetch(`${TEST_BASE_URL}/api/messages?conversationId=1&limit=0`, auth);
   assert.equal(badLimit.status, 400);
 
-  const badBefore = await fetch(`${BASE}/api/messages?conversationId=1&before=abc`, auth);
+  const badBefore = await fetch(`${TEST_BASE_URL}/api/messages?conversationId=1&before=abc`, auth);
   assert.equal(badBefore.status, 400);
 });
 
@@ -158,7 +157,7 @@ test('GET /api/messages page messages stay ascending by id', async (t) => {
     return;
   }
 
-  const res = await fetch(`${BASE}/api/messages?conversationId=1&limit=5`, {
+  const res = await fetch(`${TEST_BASE_URL}/api/messages?conversationId=1&limit=5`, {
     headers: { Cookie: alice.cookie },
   });
   assert.equal(res.status, 200);

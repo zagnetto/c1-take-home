@@ -1,29 +1,11 @@
 import type { NextFunction, Request, Response } from 'express';
+import { INFRA_ERROR_CODES, INFRA_ERROR_NAMES } from '../constants/errors.ts';
 
 type AsyncRouteHandler = (
   req: Request,
   res: Response,
   next: NextFunction,
 ) => void | Promise<void>;
-
-const INFRA_ERROR_CODES = new Set([
-  'ECONNREFUSED',
-  'ETIMEDOUT',
-  'ENOTFOUND',
-  'ECONNRESET',
-  'EPIPE',
-  'EHOSTUNREACH',
-  'EAI_AGAIN',
-  'PROTOCOL_CONNECTION_LOST',
-  'ER_CON_COUNT_ERROR',
-]);
-
-const INFRA_ERROR_NAMES = new Set([
-  'MongoNetworkError',
-  'MongoServerSelectionError',
-  'MongoTimeoutError',
-  'MongoNotConnectedError',
-]);
 
 /** Express 4 does not catch rejected promises in async handlers — forward them to error middleware. */
 export function asyncHandler(fn: AsyncRouteHandler) {

@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { pool } from '../db/mysql.ts';
 import { redis } from '../db/redis.ts';
 import { config } from '../config.ts';
-import { sessionTokenKey, sessionUserSlotKey } from './sessionKeys.ts';
+import { sessionTokenKey, sessionUserSlotKey } from '../constants/redis.ts';
 
 export interface SessionUser {
   userId: number;

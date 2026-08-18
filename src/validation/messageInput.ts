@@ -1,8 +1,5 @@
-/** Maximum characters stored for a message body (after trim and sanitization). */
-export const MAX_MESSAGE_BODY_LENGTH = 10_000;
-
-/** Matches `conversations.title` column (`VARCHAR(200)`). */
-export const MAX_CONVERSATION_TITLE_LENGTH = 200;
+import { MAX_CONVERSATION_TITLE_LENGTH } from '../constants/conversations.ts';
+import { MAX_MESSAGE_BODY_LENGTH } from '../constants/messages.ts';
 
 /** Reject values that would become NaN in SQL parameters (e.g. "12abc", 0, floats). */
 export function parsePositiveInt(value: unknown): number | null {
@@ -55,3 +52,5 @@ export function parseClientId(value: unknown): string | null | 'invalid' {
   if (trimmed.length === 0 || trimmed.length > 64) return 'invalid';
   return trimmed;
 }
+
+export { MAX_CONVERSATION_TITLE_LENGTH, MAX_MESSAGE_BODY_LENGTH };
