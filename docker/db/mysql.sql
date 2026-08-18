@@ -28,7 +28,7 @@ CREATE TABLE messages (
   client_id VARCHAR(64) NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_messages_conversation_id (conversation_id, id),
-  UNIQUE INDEX idx_messages_client_id (client_id)
+  UNIQUE INDEX idx_messages_sender_client_id (sender_id, client_id)
 );
 
 INSERT INTO users (id, name, email) VALUES

@@ -1,5 +1,5 @@
 import express from 'express';
-import { createMessage } from '../services/messages.ts';
+import { createMessage, IdempotencyConflictError } from '../services/messages.ts';
 import { pool } from '../db/mysql.ts';
 import { mongo } from '../db/mongo.ts';
 import { broadcast } from '../ws/hub.ts';
@@ -42,15 +42,22 @@ messagesRouter.post(
     return res.status(400).json({ error: 'clientId must be a string up to 64 characters' });
   }
 
-  const { message: msg, isNew } = await createMessage({
-    conversationId,
-    senderId: req.sessionUser.userId,
-    body,
-    clientId: clientIdParsed,
-  });
+  try {
+    const { message: msg, isNew } = await createMessage({
+      conversationId,
+      senderId: req.sessionUser.userId,
+      body,
+      clientId: clientIdParsed,
+    });
 
-  if (isNew) void broadcast(msg.conversationId, { type: 'message', ...msg });
-  res.status(isNew ? 201 : 200).json(msg);
+    if (isNew) void broadcast(msg.conversationId, { type: 'message', ...msg });
+    res.status(isNew ? 201 : 200).json(msg);
+  } catch (err) {
+    if (err instanceof IdempotencyConflictError) {
+      return res.status(409).json({ error: err.message });
+    }
+    throw err;
+  }
   }),
 );
 

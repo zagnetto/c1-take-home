@@ -33,8 +33,13 @@ Make `POST /api/messages` safe to retry: the same `clientId` must always yield t
 | Case | HTTP | Broadcast | DB rows |
 |---|---|---|---|
 | First send with `clientId` | 201 | yes | 1 MySQL + 1 Mongo |
-| Retry with same `clientId` | 200 | no | unchanged |
+| Retry with same `clientId` (same sender, conversation, body) | 200 | no | unchanged |
+| Same `clientId`, different sender | 201 each | yes | separate rows per sender |
+| Same sender reuses `clientId` with different body or conversation | 409 | no | unchanged |
 | Send without `clientId` | 201 | yes | insert (no dedup) |
+
+**Scope (PR 2):** idempotency key is `(senderId, clientId)`, not global `clientId`. See
+`spec/idempotency-user-scope.md`.
 
 ## Alternatives considered
 

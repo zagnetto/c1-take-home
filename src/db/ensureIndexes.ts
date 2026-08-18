@@ -14,11 +14,6 @@ const MYSQL_INDEXES = [
     sql: 'CREATE INDEX idx_participants_user_id ON conversation_participants (user_id, conversation_id)',
   },
   {
-    table: 'messages',
-    name: 'idx_messages_client_id',
-    sql: 'CREATE UNIQUE INDEX idx_messages_client_id ON messages (client_id)',
-  },
-  {
     table: 'users',
     name: 'idx_users_email',
     sql: 'CREATE UNIQUE INDEX idx_users_email ON users (email)',
@@ -29,6 +24,13 @@ const MYSQL_INDEXES = [
     sql: 'CREATE UNIQUE INDEX idx_conversations_title ON conversations (title)',
   },
 ] as const;
+
+const SENDER_CLIENT_ID_INDEX = {
+  table: 'messages',
+  name: 'idx_messages_sender_client_id',
+  legacyName: 'idx_messages_client_id',
+  sql: 'CREATE UNIQUE INDEX idx_messages_sender_client_id ON messages (sender_id, client_id)',
+} as const;
 
 async function mysqlIndexExists(mysqlPool: Pool, table: string, name: string): Promise<boolean> {
   const [rows] = await mysqlPool.query<Array<{ cnt: number }>>(
@@ -42,7 +44,25 @@ async function mysqlIndexExists(mysqlPool: Pool, table: string, name: string): P
   return Number(rows[0]?.cnt ?? 0) > 0;
 }
 
+async function migrateSenderClientIdIndex(mysqlPool: Pool): Promise<void> {
+  const { table, name, legacyName, sql } = SENDER_CLIENT_ID_INDEX;
+
+  if (await mysqlIndexExists(mysqlPool, table, name)) {
+    if (await mysqlIndexExists(mysqlPool, table, legacyName)) {
+      await mysqlPool.query(`DROP INDEX ${legacyName} ON ${table}`);
+    }
+    return;
+  }
+
+  if (await mysqlIndexExists(mysqlPool, table, legacyName)) {
+    await mysqlPool.query(`DROP INDEX ${legacyName} ON ${table}`);
+  }
+
+  await mysqlPool.query(sql);
+}
+
 async function ensureMysqlIndexes(mysqlPool: Pool): Promise<void> {
+  await migrateSenderClientIdIndex(mysqlPool);
   for (const index of MYSQL_INDEXES) {
     if (await mysqlIndexExists(mysqlPool, index.table, index.name)) continue;
     await mysqlPool.query(index.sql);
@@ -60,4 +80,4 @@ export async function ensureIndexes(db: Db): Promise<void> {
   await ensureMongoIndexes(db);
 }
 
-export { MYSQL_INDEXES };
+export { MYSQL_INDEXES, SENDER_CLIENT_ID_INDEX };

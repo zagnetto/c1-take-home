@@ -17,7 +17,7 @@ Fix audit items **D2**, **D6**, and **D7** as one related read-path group:
 |---|---|---|---|
 | `idx_messages_conversation_id` | `messages` | `(conversation_id, id)` | history reads, counts, last message, keyset pagination |
 | `idx_participants_user_id` | `conversation_participants` | `(user_id, conversation_id)` | list conversations for a user |
-| `idx_messages_client_id` | `messages` | `(client_id)` UNIQUE | future idempotent sends (C3) |
+| `idx_messages_sender_client_id` | `messages` | `(sender_id, client_id)` UNIQUE | idempotent sends scoped per sender (C3, PR 2) |
 | `idx_users_email` | `users` | `(email)` UNIQUE | data integrity |
 
 Fresh installs get indexes from `docker/db/mysql.sql`. Existing volumes get the same indexes from

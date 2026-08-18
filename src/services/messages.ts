@@ -25,6 +25,13 @@ export interface CreateMessageResult {
   isNew: boolean;
 }
 
+export class IdempotencyConflictError extends Error {
+  constructor() {
+    super('clientId already used for a different message');
+    this.name = 'IdempotencyConflictError';
+  }
+}
+
 type MessageRow = {
   id: number;
   conversationId: number;
@@ -50,13 +57,16 @@ function isMongoDuplicateKeyError(err: unknown): boolean {
   return typeof err === 'object' && err !== null && 'code' in err && (err as { code: number }).code === 11000;
 }
 
-async function findMessageByClientId(clientId: string): Promise<MessageRow | null> {
+async function findMessageBySenderClientId(
+  senderId: number,
+  clientId: string,
+): Promise<MessageRow | null> {
   const [rows] = await pool.query(
     `SELECT id, conversation_id AS conversationId, sender_id AS senderId, created_at AS createdAt
      FROM messages
-     WHERE client_id = ?
+     WHERE sender_id = ? AND client_id = ?
      LIMIT 1`,
-    [clientId],
+    [senderId, clientId],
   );
   const row = (rows as MessageRow[])[0];
   return row ?? null;
@@ -93,13 +103,24 @@ async function ensureMessageBody(
 }
 
 async function returnExistingMessage(
+  senderId: number,
+  conversationId: number,
   clientId: string,
   body: string,
   signature: string,
 ): Promise<CreateMessageResult> {
-  const row = await findMessageByClientId(clientId);
+  const row = await findMessageBySenderClientId(senderId, clientId);
   if (!row) {
-    throw new Error(`duplicate client_id ${clientId} but row not found`);
+    throw new Error(`duplicate client_id ${clientId} for sender ${senderId} but row not found`);
+  }
+
+  if (row.conversationId !== conversationId) {
+    throw new IdempotencyConflictError();
+  }
+
+  const existingBody = await loadMessageBody(row.id);
+  if (existingBody != null && existingBody !== body) {
+    throw new IdempotencyConflictError();
   }
 
   const storedBody = await ensureMessageBody(row, body, signature);
@@ -165,7 +186,7 @@ export async function createMessage(input: NewMessage): Promise<CreateMessageRes
     };
   } catch (err) {
     if (clientId && isDuplicateClientIdError(err)) {
-      return returnExistingMessage(clientId, body, signature);
+      return returnExistingMessage(senderId, conversationId, clientId, body, signature);
     }
     throw err;
   }
