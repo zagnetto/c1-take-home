@@ -298,6 +298,11 @@ Delete `routes/messagesPagination.ts` once constants and helpers are split.
 - Update `.cursor/skills/relay-architecture/SKILL.md` (add controllers layer).
 - Ship `docs/NNN-project-structure-refactor.md` when code lands.
 
+#### Phase 6 status
+
+- **Done** — see `docs/027-project-structure-refactor.md`.
+- `relay-architecture` skill updated: full layer table, import rules, co-located tests, session auth and Redis notes aligned with current code.
+
 ## Types (optional, phase 4+)
 
 Shared interfaces (`CreatedMessage`, `ConversationListItem`, …) may move to `src/types/` when

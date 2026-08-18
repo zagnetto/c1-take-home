@@ -14,25 +14,45 @@ no-build vanilla JS frontend in `web/`.
   and `tsconfig.json` sets `noEmit`. Type checking is advisory only; nothing enforces it at runtime.
 - Relative imports carry explicit extensions (`from './config.ts'`). Keep that style; dropping the
   extension breaks the loader.
-- `allowJs: true`, `checkJs: false`, so the `.js` files under `src/routes/` are completely unchecked
-  even though they use TS-only import specifiers. Treat them as legacy: see
-  [relay-api-conventions](../relay-api-conventions/SKILL.md).
 
 ## Layers
 
+HTTP requests flow **routes → controllers → services → db**. WebSocket fan-out is invoked from
+controllers when a write should reach live clients (e.g. new message).
+
 | Path | Responsibility |
 |---|---|
-| `src/index.ts` | Bootstrap: express, static `web/`, mount routers, create http server, attach WS, wait for MySQL and Mongo, listen |
+| `src/index.ts` | Bootstrap: express, static `web/`, mount routers, create http server, attach WS, wait for MySQL/Mongo/Redis, listen |
 | `src/config.ts` | Env parsing with docker-hostname fallbacks (`port`, `mysqlUrl`, `mongoUrl`, `redisUrl`) |
-| `src/routes/*` | HTTP boundary, mounted at `/api/conversations`, `/api/messages`, `/api/search` |
-| `src/services/*` | Domain logic (`createMessage` is the only one so far) |
-| `src/db/*` | Connection singletons plus retry helpers (`pool`/`waitForMysql`, `connectMongo`/`mongo`) |
+| `src/routes/*` | Express Router only: paths, middleware, `asyncHandler(controllerFn)` binding |
+| `src/controllers/*` | Parse/validate input, call services, map errors → HTTP status/json; may call `broadcast()` for realtime orchestration |
+| `src/services/*` | Domain logic and **all** MySQL / Mongo / Redis queries |
+| `src/constants/*` | Limits, Redis key/channel names, infra error code sets (no I/O) |
+| `src/helpers/*` | Pure utilities (`pagination`, `mysqlErrors`, …) |
+| `src/helpers/validation/*` | Input parsers and sanitizers (`parsePositiveInt`, `sanitizeMessageBody`, …) |
+| `src/middleware/*` | Session, conversation access, `asyncHandler`, global error handler |
+| `src/db/*` | Connection singletons, `ensureIndexes` — no business queries |
 | `src/ws/hub.ts` | WebSocket server, per-connection subscriptions, `broadcast()` |
+| `src/testHelpers/*` | Shared fixtures for integration tests (`httpSession`, `wsSession`, …) |
 | `web/` | Static frontend, plain JS, no bundler |
 | `docker/` | Dockerfile, Envoy config, MySQL init SQL, Mongo seed script |
 
-Route handlers must not own domain logic. New behaviour belongs in `src/services/`, so it can be
-reused by both the HTTP and realtime paths.
+### Import rules
+
+| Layer | May import | Must not |
+|---|---|---|
+| `routes/` | controllers, middleware | `pool`, `mongo`, `redis`, SQL, domain logic |
+| `controllers/` | services, helpers, constants, `ws/hub` (orchestration) | `pool`, `mongo`, `redis`, raw SQL |
+| `services/` | db clients, helpers, constants, other services | Express types, `req`/`res` |
+| `helpers/` | other helpers, constants | db clients, Express |
+| `db/` | config | business/domain logic |
+
+Tests live in per-module `tests/` subfolders (`src/**/tests/**/*.test.ts`), co-located with the
+code they exercise — not a top-level `src/tests/`.
+
+**Where new code goes:** add the route wiring in `routes/`, HTTP mapping in `controllers/`, queries
+and business rules in `services/`. See [relay-api-conventions](../relay-api-conventions/SKILL.md)
+for endpoint shapes.
 
 ## Data model — deliberately split across two stores
 
@@ -56,7 +76,7 @@ MongoDB holds the text in collection `message_bodies`:
    to obtain the id, then the Mongo document is written with it. Any new write path must keep both
    sides in step.
 2. **The two writes are not atomic** and there is no compensation. A failure between them leaves a
-   message row with no body; `src/routes/messages.js` masks that with `?? ''`. If you add a write
+   message row with no body; `services/messages.ts` masks that with `?? ''` on read. If you add a write
    path, decide explicitly how you handle a partial write and write it down.
 3. **Reads must join by id in bulk**, not per row — the existing pattern is one MySQL query followed
    by a single `find({ _id: { $in: ids } })`.
@@ -69,20 +89,18 @@ MongoDB holds the text in collection `message_bodies`:
   `api` cluster with `timeout: 0s` and websocket upgrade enabled. **There is no session affinity**,
   so a client's WebSocket and its HTTP requests can land on different instances.
 - **API instances** use `expose`, not `ports` — reach them only through Envoy or `docker compose exec`.
-- **Redis** is running and its URL is in `config.redisUrl`, but nothing uses it and no client library
-  is installed. It is the intended home for cross-instance state: see
-  [relay-redis-conventions](../relay-redis-conventions/SKILL.md).
+- **Redis** backs session tokens and cross-instance WebSocket fan-out (`constants/redis.ts` key
+  builders). See [relay-redis-conventions](../relay-redis-conventions/SKILL.md).
 - **Seeding**: MySQL runs `docker/db/mysql.sql` only when its data directory is empty; the one-shot
   `seed` service inserts the matching Mongo bodies and `api` waits for it to complete. Seed data is
   users 1-3 (Alice, Bob, Carol), conversations 1-2, messages 1-3.
 
 ## Identity and state gaps to be aware of
 
-- There is **no authentication**. `web/app.js` hardcodes `userId = 1` and every endpoint trusts the
-  `userId`/`senderId` it receives. Do not build a feature that assumes a trustworthy caller without
-  saying so in your notes.
-- Conversation membership is never checked on read or write, so any user id can post into any
-  conversation.
+- **Session auth** assigns a seeded user via `POST /api/session`; protected routes use
+  `requireSession` and derive `senderId` from the session, not from client-supplied body fields.
+- **Conversation access** is enforced on message routes via `requireConversationAccess`; other paths
+  may still need explicit checks when added.
 - The unread dot lives only in browser memory and is lost on reload; nothing server-side tracks a
   read position.
 
