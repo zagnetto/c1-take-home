@@ -1,10 +1,11 @@
 import express from 'express';
 import { pool } from '../db/mysql.ts';
 import { requireSession, sessionOrQueryUserId } from '../middleware/session.ts';
+import { asyncHandler } from '../middleware/errorHandler.ts';
 
 export const conversationsRouter = express.Router();
 
-conversationsRouter.get('/', sessionOrQueryUserId, async (req, res) => {
+conversationsRouter.get('/', sessionOrQueryUserId, asyncHandler(async (req, res) => {
   const userId = req.sessionUser.userId;
 
   const [conversations] = await pool.query(
@@ -31,9 +32,9 @@ conversationsRouter.get('/', sessionOrQueryUserId, async (req, res) => {
   }
 
   res.json(result);
-});
+}));
 
-conversationsRouter.post('/', requireSession, async (req, res) => {
+conversationsRouter.post('/', requireSession, asyncHandler(async (req, res) => {
   const { title, participantIds } = req.body || {};
   if (!title || !Array.isArray(participantIds) || participantIds.length === 0) {
     return res.status(400).json({ error: 'title and a non-empty participantIds[] are required' });
@@ -52,4 +53,4 @@ conversationsRouter.post('/', requireSession, async (req, res) => {
   }
 
   res.status(201).json({ id, title, participantIds: ids });
-});
+}));

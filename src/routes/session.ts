@@ -2,10 +2,11 @@ import express from 'express';
 import { setSessionCookie, parseCookies } from '../middleware/session.ts';
 import { config } from '../config.ts';
 import { createSession, lookupSession } from '../services/session.ts';
+import { asyncHandler } from '../middleware/errorHandler.ts';
 
 export const sessionRouter = express.Router();
 
-sessionRouter.post('/', async (req, res) => {
+sessionRouter.post('/', asyncHandler(async (req, res) => {
   const token = parseCookies(req.headers.cookie)[config.sessionCookieName];
 
   if (token) {
@@ -22,4 +23,4 @@ sessionRouter.post('/', async (req, res) => {
 
   setSessionCookie(res, created.token);
   res.status(201).json(created.user);
-});
+}));

@@ -4,10 +4,11 @@ import { pool } from '../db/mysql.ts';
 import { mongo } from '../db/mongo.ts';
 import { broadcast } from '../ws/hub.ts';
 import { requireSession } from '../middleware/session.ts';
+import { asyncHandler } from '../middleware/errorHandler.ts';
 
 export const messagesRouter = express.Router();
 
-messagesRouter.post('/', requireSession, async (req, res) => {
+messagesRouter.post('/', requireSession, asyncHandler(async (req, res) => {
   const { conversationId, body, clientId } = req.body || {};
   const senderId = req.sessionUser.userId;
   if (!conversationId || !body) {
@@ -23,9 +24,9 @@ messagesRouter.post('/', requireSession, async (req, res) => {
 
   void broadcast(msg.conversationId, { type: 'message', ...msg });
   res.status(201).json(msg);
-});
+}));
 
-messagesRouter.get('/', async (req, res) => {
+messagesRouter.get('/', asyncHandler(async (req, res) => {
   const conversationId = Number(req.query.conversationId);
   if (!conversationId) return res.status(400).json({ error: 'conversationId is required' });
 
@@ -42,4 +43,4 @@ messagesRouter.get('/', async (req, res) => {
   const bodyById = new Map(bodies.map((b) => [b._id, b.body]));
 
   res.json(rows.map((r) => ({ ...r, body: bodyById.get(r.id) ?? '' })));
-});
+}));

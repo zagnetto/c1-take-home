@@ -1,10 +1,17 @@
 import Redis from 'ioredis';
 import { config } from '../config.ts';
 
+function attachRedisErrorLogging(client: Redis, label: string): void {
+  client.on('error', (err) => {
+    console.error(`[redis:${label}]`, err);
+  });
+}
+
 export const redis = new Redis(config.redisUrl, {
   lazyConnect: false,
   maxRetriesPerRequest: 3,
 });
+attachRedisErrorLogging(redis, 'client');
 
 let subscriber: Redis | undefined;
 
@@ -15,6 +22,7 @@ export function redisSubscriber(): Redis {
       lazyConnect: false,
       maxRetriesPerRequest: null,
     });
+    attachRedisErrorLogging(subscriber, 'subscriber');
   }
   return subscriber;
 }
