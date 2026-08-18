@@ -117,11 +117,26 @@ async function returnExistingMessage(
   };
 }
 
+async function rollbackMessageRow(id: number): Promise<void> {
+  try {
+    await pool.execute('DELETE FROM messages WHERE id = ?', [id]);
+  } catch (rollbackErr) {
+    console.error('[createMessage] failed to roll back MySQL row after Mongo write error', {
+      id,
+      err: rollbackErr,
+    });
+  }
+}
+
 export async function createMessage(input: NewMessage): Promise<CreateMessageResult> {
   const { conversationId, senderId, body, clientId } = input;
 
   const signature = await computeMessageSignature(body);
 
+  // Compensating delete when Mongo fails after MySQL INSERT. A production-grade fix is a
+  // transactional outbox: MySQL trigger (or same transaction) writes an outbox row, then a
+  // message broker delivers the body to Mongo — proposed by the project author; see
+  // spec/c2-dual-write-rollback.md and docs/015-dual-write-rollback.md.
   try {
     const createdAt = new Date();
     const [res] = await pool.execute(
@@ -129,14 +144,20 @@ export async function createMessage(input: NewMessage): Promise<CreateMessageRes
       [conversationId, senderId, clientId, createdAt],
     );
     const id = (res as { insertId: number }).insertId;
-    await mongo().collection('message_bodies').insertOne({
-      _id: id as never,
-      conversationId,
-      senderId,
-      body,
-      signature,
-      createdAt,
-    });
+
+    try {
+      await mongo().collection('message_bodies').insertOne({
+        _id: id as never,
+        conversationId,
+        senderId,
+        body,
+        signature,
+        createdAt,
+      });
+    } catch (mongoErr) {
+      await rollbackMessageRow(id);
+      throw mongoErr;
+    }
 
     return {
       message: { id, conversationId, senderId, body, createdAt },
