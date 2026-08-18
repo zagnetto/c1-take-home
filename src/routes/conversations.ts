@@ -27,28 +27,33 @@ async function findConversationIdByTitle(title: string): Promise<number | null> 
   return rows[0]?.id ?? null;
 }
 
+/** Scoped to the requesting user's conversations — see spec/conversation-list-scaling.md */
+export const LIST_CONVERSATIONS_SQL = `
+  SELECT c.id,
+         c.title,
+         COALESCE(stats.message_count, 0) AS messageCount,
+         m.id AS lastMessageId,
+         m.sender_id AS lastSenderId,
+         m.created_at AS lastCreatedAt
+  FROM conversations c
+  JOIN conversation_participants p ON p.conversation_id = c.id
+  LEFT JOIN (
+    SELECT m.conversation_id,
+           COUNT(*) AS message_count,
+           MAX(m.id) AS last_id
+    FROM messages m
+    INNER JOIN conversation_participants cp
+      ON cp.conversation_id = m.conversation_id AND cp.user_id = ?
+    GROUP BY m.conversation_id
+  ) stats ON stats.conversation_id = c.id
+  LEFT JOIN messages m ON m.id = stats.last_id
+  WHERE p.user_id = ?
+  ORDER BY c.id ASC`;
+
 conversationsRouter.get('/', requireSession, asyncHandler(async (req, res) => {
   const userId = req.sessionUser.userId;
 
-  const [rows] = await pool.query(
-    `SELECT c.id,
-            c.title,
-            COALESCE(stats.message_count, 0) AS messageCount,
-            m.id AS lastMessageId,
-            m.sender_id AS lastSenderId,
-            m.created_at AS lastCreatedAt
-     FROM conversations c
-     JOIN conversation_participants p ON p.conversation_id = c.id
-     LEFT JOIN (
-       SELECT conversation_id, COUNT(*) AS message_count, MAX(id) AS last_id
-       FROM messages
-       GROUP BY conversation_id
-     ) stats ON stats.conversation_id = c.id
-     LEFT JOIN messages m ON m.id = stats.last_id
-     WHERE p.user_id = ?
-     ORDER BY c.id ASC`,
-    [userId],
-  );
+  const [rows] = await pool.query(LIST_CONVERSATIONS_SQL, [userId, userId]);
 
   const result = rows.map((r) => ({
     id: r.id,
