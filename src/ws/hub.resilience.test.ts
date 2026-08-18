@@ -33,12 +33,12 @@ async function redisAvailable(): Promise<boolean> {
   }
 }
 
-async function startHub(): Promise<{
+async function startHub(options: { heartbeatMs?: number } = {}): Promise<{
   server: http.Server;
   port: number;
   close: () => Promise<void>;
 }> {
-  process.env.WS_HEARTBEAT_MS = '80';
+  process.env.WS_HEARTBEAT_MS = String(options.heartbeatMs ?? 80);
   process.env.WS_MAX_BUFFERED_BYTES = '1024';
   process.env.WS_MAX_SUBSCRIPTIONS = '50';
   process.env.WS_MAX_PAYLOAD_BYTES = '4096';
@@ -56,7 +56,11 @@ async function startHub(): Promise<{
   };
 }
 
-async function openAuthenticatedWs(port: number, userId: number): Promise<{
+async function openAuthenticatedWs(
+  port: number,
+  userId: number,
+  options: { autoPong?: boolean } = {},
+): Promise<{
   ws: WebSocket;
   redis: Redis;
   keys: string[];
@@ -65,7 +69,7 @@ async function openAuthenticatedWs(port: number, userId: number): Promise<{
   const session = await seedRedisSession(userId, redis);
   const ws = new WebSocket(`ws://127.0.0.1:${port}`, {
     headers: wsConnectHeaders(session.cookie, port),
-    autoPong: false,
+    autoPong: options.autoPong ?? true,
   });
   await new Promise<void>((resolve, reject) => {
     ws.once('open', () => resolve());
@@ -81,7 +85,7 @@ test('terminates clients that miss heartbeat pong (R1)', async (t) => {
   }
 
   const { port, close } = await startHub();
-  const { ws, redis, keys } = await openAuthenticatedWs(port, 1);
+  const { ws, redis, keys } = await openAuthenticatedWs(port, 1, { autoPong: false });
 
   await wait(350);
 
@@ -161,18 +165,18 @@ test('subscribe ignores conversations the user is not a member of (R2 + access b
     return;
   }
 
-  const { port, close } = await startHub();
+  const { port, close } = await startHub({ heartbeatMs: 30_000 });
   const { initRedisFanout } = await import('./hub.ts');
   await initRedisFanout();
 
   const { ws, redis, keys } = await openAuthenticatedWs(port, 1);
 
+  const received: unknown[] = [];
+  ws.on('message', (raw) => received.push(JSON.parse(raw.toString())));
+
   const ids = Array.from({ length: 100 }, (_, i) => i + 1);
   ws.send(JSON.stringify({ type: 'subscribe', conversationIds: ids }));
   await wait(150);
-
-  const received: unknown[] = [];
-  ws.on('message', (raw) => received.push(JSON.parse(raw.toString())));
 
   const pub = new Redis(config.redisUrl, { maxRetriesPerRequest: 1, connectTimeout: 2000 });
   await pub.publish(
