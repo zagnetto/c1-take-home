@@ -20,6 +20,14 @@ let searchLoading = false;
 
 const MESSAGE_PAGE_LIMIT = 50;
 const SEARCH_PAGE_LIMIT = 50;
+const TYPING_PULSE_MS = 2000;
+const TYPING_EXPIRE_MS = 4000;
+
+let typingPulseTimer = null;
+let lastTypingSentAt = 0;
+let localTypingActive = false;
+/** @type {Map<number, Map<number, ReturnType<typeof setTimeout>>>} */
+const remoteTyping = new Map();
 
 function setComposerEnabled(enabled) {
   // Keep #text enabled during send so Enter-submit does not steal focus (sendInFlight blocks dupes).
@@ -131,10 +139,21 @@ function connectWs({ replace = false } = {}) {
         scheduleWsReconnect();
       }
     }
+    if (document.getElementById('text').value.trim() && activeConversation) {
+      localTypingActive = false;
+      lastTypingSentAt = 0;
+      pulseTyping();
+    }
   };
   ws.onmessage = (ev) => {
     const msg = JSON.parse(ev.data);
+    if (msg.type === 'typing') {
+      if (Number(msg.userId) === Number(userId)) return;
+      setRemoteTyping(Number(msg.conversationId), Number(msg.userId), msg.isTyping);
+      return;
+    }
     if (msg.type !== 'message') return;
+    setRemoteTyping(Number(msg.conversationId), Number(msg.senderId), false);
     const c = conversations.find((x) => x.id === msg.conversationId);
     if (c) c.messageCount += 1;
     if (msg.conversationId === activeConversation) {
@@ -173,6 +192,13 @@ function renderSidebar() {
       dot.textContent = '●';
       li.appendChild(dot);
     }
+    const typers = remoteTyping.get(Number(c.id));
+    if (typers?.size) {
+      const hint = document.createElement('span');
+      hint.className = 'typing-hint';
+      hint.textContent = 'typing…';
+      li.appendChild(hint);
+    }
     li.onclick = () => openConversation(c.id, c.title);
     list.appendChild(li);
   }
@@ -196,6 +222,7 @@ function renderEarlierHint() {
 }
 
 async function openConversation(id, title) {
+  stopLocalTyping();
   activeConversation = id;
   searchQuery = null;
   searchCursor = null;
@@ -210,11 +237,121 @@ async function openConversation(id, title) {
   const page = await fetchMessagePage(id, { limit: MESSAGE_PAGE_LIMIT });
   const pane = document.getElementById('messages');
   pane.innerHTML = '';
-  for (const m of page.messages) appendMessage(m, { scroll: false });
+  for (const m of page.messages) pane.appendChild(createMessageElement(m));
+  ensureTypingIndicatorElement();
   oldestLoadedId = page.nextBefore;
   hasMoreMessages = page.hasMore;
   renderEarlierHint();
   pane.scrollTop = pane.scrollHeight;
+  renderTypingIndicator();
+}
+
+function sendTyping(conversationId, isTyping) {
+  if (!ws || ws.readyState !== WebSocket.OPEN || !conversationId) return;
+  ws.send(JSON.stringify({ type: 'typing', conversationId, isTyping }));
+}
+
+function stopLocalTyping() {
+  if (typingPulseTimer) {
+    clearTimeout(typingPulseTimer);
+    typingPulseTimer = null;
+  }
+  if (localTypingActive && activeConversation) {
+    sendTyping(activeConversation, false);
+    localTypingActive = false;
+  }
+  lastTypingSentAt = 0;
+}
+
+function pulseTyping() {
+  if (!activeConversation) return;
+  const now = Date.now();
+  if (!localTypingActive || now - lastTypingSentAt >= TYPING_PULSE_MS) {
+    sendTyping(activeConversation, true);
+    localTypingActive = true;
+    lastTypingSentAt = now;
+  }
+  if (typingPulseTimer) clearTimeout(typingPulseTimer);
+  typingPulseTimer = setTimeout(() => {
+    typingPulseTimer = null;
+    const input = document.getElementById('text');
+    if (input.value.trim() && activeConversation) pulseTyping();
+  }, TYPING_PULSE_MS);
+}
+
+function handleComposerInput() {
+  const input = document.getElementById('text');
+  if (!input.value.trim()) {
+    stopLocalTyping();
+    return;
+  }
+  pulseTyping();
+}
+
+function setRemoteTyping(conversationId, remoteUserId, isTyping) {
+  if (Number(remoteUserId) === Number(userId)) return;
+
+  let conv = remoteTyping.get(conversationId);
+  if (!conv) {
+    conv = new Map();
+    remoteTyping.set(conversationId, conv);
+  }
+
+  const existing = conv.get(remoteUserId);
+  if (existing) clearTimeout(existing);
+
+  if (isTyping) {
+    conv.set(
+      remoteUserId,
+      setTimeout(() => {
+        conv.delete(remoteUserId);
+        if (conv.size === 0) remoteTyping.delete(conversationId);
+        renderTypingIndicator();
+      }, TYPING_EXPIRE_MS),
+    );
+  } else {
+    conv.delete(remoteUserId);
+    if (conv.size === 0) remoteTyping.delete(conversationId);
+  }
+  renderTypingIndicator();
+  renderSidebar();
+}
+
+function ensureTypingIndicatorElement() {
+  const pane = document.getElementById('messages');
+  let el = pane.querySelector('.typing-indicator');
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'msg typing-indicator';
+    el.hidden = true;
+    pane.appendChild(el);
+  } else {
+    pane.appendChild(el);
+  }
+  return el;
+}
+
+function renderTypingIndicator() {
+  const el = ensureTypingIndicatorElement();
+  if (!activeConversation) {
+    el.textContent = '';
+    el.hidden = true;
+    return;
+  }
+  const conv = remoteTyping.get(Number(activeConversation));
+  if (!conv || conv.size === 0) {
+    el.textContent = '';
+    el.hidden = true;
+    return;
+  }
+  const ids = [...conv.keys()];
+  el.textContent =
+    ids.length === 1 ? `#${ids[0]} is typing…` : `${ids.map((id) => `#${id}`).join(', ')} are typing…`;
+  el.hidden = false;
+
+  const pane = document.getElementById('messages');
+  const nearBottom = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 80;
+  if (nearBottom) pane.scrollTop = pane.scrollHeight;
 }
 
 function createMessageElement(m) {
@@ -253,12 +390,22 @@ async function loadOlderMessages() {
 
 function appendMessage(m, opts = {}) {
   const pane = document.getElementById('messages');
-  pane.appendChild(createMessageElement(m));
+  const typingEl = ensureTypingIndicatorElement();
+  pane.insertBefore(createMessageElement(m), typingEl);
   if (opts.scroll !== false) pane.scrollTop = pane.scrollHeight;
 }
 
 document.getElementById('messages').addEventListener('scroll', (ev) => {
   if (ev.target.scrollTop <= 24) void loadOlderMessages();
+});
+
+document.getElementById('text').addEventListener('input', () => handleComposerInput());
+document.getElementById('text').addEventListener('blur', () => {
+  // Alt-tabbing to another window (e.g. incognito) blurs the field but should not cancel typing.
+  requestAnimationFrame(() => {
+    if (!document.hasFocus()) return;
+    stopLocalTyping();
+  });
 });
 
 document.getElementById('composer').onsubmit = async (e) => {
@@ -270,6 +417,7 @@ document.getElementById('composer').onsubmit = async (e) => {
 
   const clientId = crypto.randomUUID();
   input.value = '';
+  stopLocalTyping();
   sendInFlight = true;
   setComposerEnabled(false);
 
@@ -377,6 +525,7 @@ async function loadMoreSearchResults() {
 }
 
 function renderResults(q, page, { replace = true } = {}) {
+  stopLocalTyping();
   activeConversation = null;
   searchQuery = q;
   searchCursor = page.nextCursor ?? null;

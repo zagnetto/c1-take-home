@@ -2,12 +2,18 @@ import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage, Server } from 'node:http';
 import { config } from '../config.ts';
 import { parseCookies } from '../middleware/session.ts';
-import { filterMemberConversationIds } from '../services/conversationAccess.ts';
+import { filterMemberConversationIds, isConversationMember } from '../services/conversationAccess.ts';
 import { lookupSession, type SessionUser } from '../services/session.ts';
 import { redis, redisSubscriber } from '../db/redis.ts';
 import { REALTIME_EVENTS_CHANNEL } from '../constants/redis.ts';
+import { isOutboundTypingFrame } from './protocol.ts';
 
-type Client = WebSocket & { subs?: Set<number>; isAlive?: boolean; userId: number };
+type Client = WebSocket & {
+  subs?: Set<number>;
+  isAlive?: boolean;
+  userId: number;
+  typingConversations?: Set<number>;
+};
 
 type UpgradeRequest = IncomingMessage & { sessionUser?: SessionUser };
 
@@ -85,9 +91,55 @@ function deliverToRoom(conversationId: number, payload: unknown, maxBufferedByte
   if (!room) return;
 
   const data = JSON.stringify(payload);
+  const skipUserId = isOutboundTypingFrame(payload) ? payload.userId : undefined;
   for (const ws of room) {
+    if (skipUserId != null && ws.userId === skipUserId) continue;
     sendFrame(ws, data, maxBufferedBytes);
   }
+}
+
+function trackTypingState(ws: Client, conversationId: number, isTyping: boolean): void {
+  if (!ws.typingConversations) ws.typingConversations = new Set();
+  if (isTyping) {
+    ws.typingConversations.add(conversationId);
+  } else {
+    ws.typingConversations.delete(conversationId);
+  }
+}
+
+async function publishTypingStopped(ws: Client): Promise<void> {
+  if (!ws.typingConversations?.size) return;
+  for (const conversationId of ws.typingConversations) {
+    await broadcast(conversationId, {
+      type: 'typing',
+      conversationId,
+      userId: ws.userId,
+      isTyping: false,
+    });
+  }
+  ws.typingConversations.clear();
+}
+
+async function handleTypingFrame(
+  ws: Client,
+  raw: { conversationId?: unknown; isTyping?: unknown },
+): Promise<void> {
+  const conversationId = Number(raw.conversationId);
+  if (!Number.isFinite(conversationId) || conversationId <= 0) return;
+  if (raw.isTyping !== true && raw.isTyping !== false) return;
+  if (ws.subs?.has(conversationId)) {
+    /* fast path — already subscribed to this room */
+  } else if (!(await isConversationMember(ws.userId, conversationId))) {
+    return;
+  }
+
+  trackTypingState(ws, conversationId, raw.isTyping);
+  void broadcast(conversationId, {
+    type: 'typing',
+    conversationId,
+    userId: ws.userId,
+    isTyping: raw.isTyping,
+  });
 }
 
 export function attachWs(server: Server): void {
@@ -125,6 +177,7 @@ export function attachWs(server: Server): void {
     for (const ws of wss.clients) {
       const client = ws as Client;
       if (client.isAlive === false) {
+        void publishTypingStopped(client);
         removeClient(client);
         client.terminate();
         continue;
@@ -143,7 +196,10 @@ export function attachWs(server: Server): void {
     ws.subs = new Set();
     ws.isAlive = true;
 
-    const detach = (): void => removeClient(ws);
+    const detach = (): void => {
+      void publishTypingStopped(ws);
+      removeClient(ws);
+    };
 
     ws.on('pong', () => {
       ws.isAlive = true;
@@ -151,13 +207,22 @@ export function attachWs(server: Server): void {
     ws.on('message', (raw) => {
       void (async () => {
         try {
-          const m = JSON.parse(raw.toString()) as { type?: string; conversationIds?: unknown };
+          const m = JSON.parse(raw.toString()) as {
+            type?: string;
+            conversationIds?: unknown;
+            conversationId?: unknown;
+            isTyping?: unknown;
+          };
           if (m.type === 'subscribe' && Array.isArray(m.conversationIds)) {
             const allowed = await filterMemberConversationIds(
               ws.userId,
               m.conversationIds.map(Number),
             );
             setSubscriptions(ws, allowed, limits.maxSubscriptions);
+            return;
+          }
+          if (m.type === 'typing') {
+            await handleTypingFrame(ws, m);
           }
         } catch {
           /* ignore malformed frames */
