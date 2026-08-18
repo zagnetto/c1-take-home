@@ -5,7 +5,7 @@ import { waitForMysql } from './db/mysql.ts';
 import { connectMongo } from './db/mongo.ts';
 import { ensureIndexes } from './db/ensureIndexes.ts';
 import { waitForRedis } from './db/redis.ts';
-import { conversationsRouter } from './routes/conversations.js';
+import { conversationsRouter } from './routes/conversations.ts';
 import { messagesRouter } from './routes/messages.ts';
 import { searchRouter } from './routes/search.js';
 import { sessionRouter } from './routes/session.ts';

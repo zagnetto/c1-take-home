@@ -43,18 +43,25 @@ async function initSession() {
   userId = body.userId;
   userName = body.name;
   renderUser();
-  await loadConversations();
+  await loadConversations({ reconnectWs: true });
 }
 
 function renderUser() {
   document.getElementById('userBadge').textContent = userName ?? `#${userId}`;
 }
 
-async function loadConversations() {
+async function loadConversations({ reconnectWs = false } = {}) {
   const res = await fetch('/api/conversations', fetchOpts);
+  if (!res.ok) return;
   conversations = await res.json();
   renderSidebar();
-  connectWs({ replace: true });
+  if (reconnectWs) {
+    connectWs({ replace: true });
+  } else if (ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'subscribe', conversationIds: conversations.map((c) => c.id) }));
+  } else {
+    connectWs();
+  }
 }
 
 function setWsStatus(state) {
@@ -98,9 +105,10 @@ function connectWs({ replace = false } = {}) {
   if (replace && ws) {
     wsIntentionalClose = true;
     ws.close();
-    wsIntentionalClose = false;
   }
-  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+  if (!replace && ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
 
   const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
   ws = new WebSocket(`${scheme}://${location.host}/`);
@@ -131,7 +139,10 @@ function connectWs({ replace = false } = {}) {
     renderSidebar();
   };
   ws.onclose = () => {
-    if (wsIntentionalClose) return;
+    if (wsIntentionalClose) {
+      wsIntentionalClose = false;
+      return;
+    }
     setWsStatus('disconnected');
     wsNeedsResync = true;
     scheduleWsReconnect();
@@ -269,12 +280,17 @@ document.getElementById('composer').onsubmit = async (e) => {
 document.getElementById('newConv').onclick = async () => {
   const title = prompt('Conversation title?');
   if (!title) return;
-  await fetch('/api/conversations', {
+  const res = await fetch('/api/conversations', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     ...fetchOpts,
     body: JSON.stringify({ title, participantIds: [2] }),
   });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    alert(err.error ?? 'Could not create conversation');
+    return;
+  }
   await loadConversations();
 };
 

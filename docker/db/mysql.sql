@@ -10,7 +10,8 @@ CREATE TABLE users (
 CREATE TABLE conversations (
   id INT PRIMARY KEY AUTO_INCREMENT,
   title VARCHAR(200) NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE INDEX idx_conversations_title (title)
 );
 
 CREATE TABLE conversation_participants (

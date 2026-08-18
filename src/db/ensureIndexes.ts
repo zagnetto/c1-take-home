@@ -23,6 +23,11 @@ const MYSQL_INDEXES = [
     name: 'idx_users_email',
     sql: 'CREATE UNIQUE INDEX idx_users_email ON users (email)',
   },
+  {
+    table: 'conversations',
+    name: 'idx_conversations_title',
+    sql: 'CREATE UNIQUE INDEX idx_conversations_title ON conversations (title)',
+  },
 ] as const;
 
 async function mysqlIndexExists(mysqlPool: Pool, table: string, name: string): Promise<boolean> {
