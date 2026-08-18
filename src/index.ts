@@ -3,10 +3,11 @@ import express from 'express';
 import { config } from './config.ts';
 import { waitForMysql } from './db/mysql.ts';
 import { connectMongo } from './db/mongo.ts';
+import { waitForRedis } from './db/redis.ts';
 import { conversationsRouter } from './routes/conversations.js';
 import { messagesRouter } from './routes/messages.js';
 import { searchRouter } from './routes/search.js';
-import { attachWs } from './ws/hub.ts';
+import { attachWs, initRedisFanout } from './ws/hub.ts';
 
 const app = express();
 app.use(express.json());
@@ -20,6 +21,8 @@ attachWs(server);
 
 await waitForMysql();
 await connectMongo();
+await waitForRedis();
+await initRedisFanout();
 
 server.listen(config.port, () => {
   console.log(`relay listening on :${config.port}`);

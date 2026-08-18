@@ -6,10 +6,12 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
-    "seed": "tsx docker/db/seed.ts"
+    "seed": "tsx docker/db/seed.ts",
+    "test": "node --import tsx --test --test-force-exit \"src/**/*.test.ts\""
   },
   "dependencies": {
     "express": "^4.19.2",
+    "ioredis": "^5.4.1",
     "mongodb": "^6.8.0",
     "mysql2": "^3.11.3",
     "ws": "^8.18.0"

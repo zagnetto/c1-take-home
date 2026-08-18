@@ -1,23 +1,27 @@
 ---
-description: Always git-add new files the agent creates during a task — do not leave deliverables untracked
+description: MANDATORY — always git-add every new file the agent creates; never leave deliverables untracked
 alwaysApply: true
 ---
 
-# Stage New Files
+# Mandatory: Stage All New Files in Git
 
-Every file you **create** while working on a task is part of the deliverable. Do not finish
-the task with those files still untracked.
+**This rule is non-negotiable.** Every file you **create** during a task is part of the
+deliverable. You **MUST** add it to git before ending your turn. Never finish a task — or any
+turn where you created files — with deliverables still untracked.
 
-## When to stage
+## When to stage (always)
 
-After creating or finishing edits on **new** files, run `git add` on them before ending your
-turn — even when the user has not asked for a commit yet.
+Run `git add` on **every new file you authored** as soon as you finish creating or editing it,
+and again before ending your turn — even when the user has not asked for a commit.
 
-This applies to files you authored in the current task, including:
+This applies without exception to files you created in the current task, including:
 
 - production code and tests (`src/**`, etc.)
 - `spec/` and `docs/` notes
 - config or scripts you added for the change
+- any other deliverable path the repo is meant to track
+
+If you created multiple new files in one turn, stage **all of them** — not a subset.
 
 ## What to skip
 
@@ -38,10 +42,13 @@ committing, run `git status` and confirm no task-related untracked files remain.
 Do **not** create commits on your own — staging new files does not override the rule to commit
 only when the user asks.
 
-## End-of-task check
+## End-of-turn checklist (required)
 
-Before wrapping up implementation:
+Before wrapping up **every** turn where you created files:
 
 1. `git status` — list untracked files you created.
-2. `git add <paths>` — stage all deliverable new files.
+2. `git add <paths>` — stage **all** deliverable new files (every path you created).
 3. Mention in your summary which new files were staged (if any).
+
+If `git status` still shows untracked deliverables you created, the turn is not done — stage
+them first.

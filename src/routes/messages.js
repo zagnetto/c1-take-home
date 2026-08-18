@@ -19,7 +19,7 @@ messagesRouter.post('/', async (req, res) => {
     clientId: clientId ?? null,
   });
 
-  broadcast(msg.conversationId, { type: 'message', ...msg });
+  void broadcast(msg.conversationId, { type: 'message', ...msg });
   res.status(201).json(msg);
 });
 
